@@ -18,6 +18,7 @@ import { getCycleCollection } from "./tools/get-cycle.js";
 import { getSleepById } from "./tools/get-sleep-by-id.js";
 import { getWorkoutById } from "./tools/get-workout-by-id.js";
 import { getCycleById } from "./tools/get-cycle-by-id.js";
+import { getWeeklySummary } from "./tools/get-weekly-summary.js";
 import { registerResources, type ResourceCache } from "./resources/index.js";
 import { readFileSync } from "node:fs";
 
@@ -295,6 +296,28 @@ export function createWhoopServer(client: WhoopClient, options?: CreateServerOpt
     },
     async (args: z.infer<typeof numericIdSchema>) =>
       safeTool(() => getCycleById(client, args.id))
+  );
+
+  // -------------------------------------------------------------------------
+  // Tool 10: get_weekly_summary
+  // -------------------------------------------------------------------------
+  server.registerTool(
+    "get_weekly_summary",
+    {
+      description:
+        "Get a summarized health report for a given week — average recovery, HRV, RHR, sleep duration and quality, workout count and strain, plus recovery trend direction.",
+      inputSchema: z.object({
+        week_start: z
+          .string()
+          .optional()
+          .describe(
+            'Start of the week to summarize. Accepts ISO 8601 or relative expressions like "last week", "this week". Defaults to most recent Monday.'
+          ),
+      }),
+      annotations: { readOnlyHint: true },
+    },
+    async (args: { week_start?: string }) =>
+      safeTool(() => getWeeklySummary(client, args))
   );
 
   // -------------------------------------------------------------------------
