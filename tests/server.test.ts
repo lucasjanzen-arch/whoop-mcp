@@ -238,7 +238,7 @@ describe("createWhoopServer", () => {
     it("returns exactly 9 tools", async () => {
       const result = await client.listTools();
 
-      expect(result.tools).toHaveLength(10);
+      expect(result.tools).toHaveLength(11);
     });
 
     it("returns tools with the correct names", async () => {
@@ -246,6 +246,7 @@ describe("createWhoopServer", () => {
       const names = result.tools.map((t) => t.name).sort();
 
       expect(names).toEqual([
+        "compare_periods",
         "get_body_measurement",
         "get_cycle_by_id",
         "get_cycle_collection",

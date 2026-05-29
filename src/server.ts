@@ -19,6 +19,7 @@ import { getSleepById } from "./tools/get-sleep-by-id.js";
 import { getWorkoutById } from "./tools/get-workout-by-id.js";
 import { getCycleById } from "./tools/get-cycle-by-id.js";
 import { getWeeklySummary } from "./tools/get-weekly-summary.js";
+import { comparePeriods } from "./tools/compare-periods.js";
 import { registerResources, type ResourceCache } from "./resources/index.js";
 import { readFileSync } from "node:fs";
 
@@ -318,6 +319,30 @@ export function createWhoopServer(client: WhoopClient, options?: CreateServerOpt
     },
     async (args: { week_start?: string }) =>
       safeTool(() => getWeeklySummary(client, args))
+  );
+
+  // -------------------------------------------------------------------------
+  // Tool 11: compare_periods
+  // -------------------------------------------------------------------------
+  server.registerTool(
+    "compare_periods",
+    {
+      description:
+        "Compare health metrics between two time periods — shows improvement or regression in recovery, sleep, and strain.",
+      inputSchema: z.object({
+        period_a_start: z.string().describe("ISO 8601 start of the first period."),
+        period_a_end: z.string().describe("ISO 8601 end of the first period."),
+        period_b_start: z.string().describe("ISO 8601 start of the second period."),
+        period_b_end: z.string().describe("ISO 8601 end of the second period."),
+      }),
+      annotations: { readOnlyHint: true },
+    },
+    async (args: {
+      period_a_start: string;
+      period_a_end: string;
+      period_b_start: string;
+      period_b_end: string;
+    }) => safeTool(() => comparePeriods(client, args))
   );
 
   // -------------------------------------------------------------------------
