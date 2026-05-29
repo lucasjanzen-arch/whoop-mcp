@@ -238,7 +238,7 @@ describe("createWhoopServer", () => {
     it("returns exactly 9 tools", async () => {
       const result = await client.listTools();
 
-      expect(result.tools).toHaveLength(11);
+      expect(result.tools).toHaveLength(12);
     });
 
     it("returns tools with the correct names", async () => {
@@ -254,6 +254,7 @@ describe("createWhoopServer", () => {
         "get_recovery_collection",
         "get_sleep_by_id",
         "get_sleep_collection",
+        "get_trend",
         "get_weekly_summary",
         "get_workout_by_id",
         "get_workout_collection",

@@ -20,6 +20,7 @@ import { getWorkoutById } from "./tools/get-workout-by-id.js";
 import { getCycleById } from "./tools/get-cycle-by-id.js";
 import { getWeeklySummary } from "./tools/get-weekly-summary.js";
 import { comparePeriods } from "./tools/compare-periods.js";
+import { getTrend } from "./tools/get-trend.js";
 import { registerResources, type ResourceCache } from "./resources/index.js";
 import { readFileSync } from "node:fs";
 
@@ -343,6 +344,32 @@ export function createWhoopServer(client: WhoopClient, options?: CreateServerOpt
       period_b_start: string;
       period_b_end: string;
     }) => safeTool(() => comparePeriods(client, args))
+  );
+
+  // -------------------------------------------------------------------------
+  // Tool 12: get_trend
+  // -------------------------------------------------------------------------
+  server.registerTool(
+    "get_trend",
+    {
+      description:
+        "Analyze a health metric trend over time — detects direction (improving/declining/stable), variability, and anomalies using linear regression.",
+      inputSchema: z.object({
+        metric: z
+          .enum(["recovery", "hrv", "rhr", "sleep_duration", "sleep_performance", "strain"])
+          .describe("The health metric to analyze."),
+        days: z
+          .number()
+          .int()
+          .min(7)
+          .max(90)
+          .optional()
+          .describe("Number of days to analyze (7–90). Default: 30."),
+      }),
+      annotations: { readOnlyHint: true },
+    },
+    async (args: { metric: "recovery" | "hrv" | "rhr" | "sleep_duration" | "sleep_performance" | "strain"; days?: number }) =>
+      safeTool(() => getTrend(client, args))
   );
 
   // -------------------------------------------------------------------------
