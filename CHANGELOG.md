@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-05-29
+
+### Added
+- **3 Analytical Tools** — `get_weekly_summary`, `compare_periods`, `get_trend` for pre-computed health insights
+- **3 Individual Record Lookup Tools** — `get_sleep_by_id`, `get_workout_by_id`, `get_cycle_by_id`
+- **4 MCP Resources** — ambient health context (`whoop://v2/user/recovery/latest`, sleep, cycle, profile) with in-memory cache and TTL
+- **5 MCP Prompts** — guided conversation starters (`weekly_health_review`, `sleep_analysis`, `recovery_trend`, `workout_recap`, `health_check`)
+- **Auto-pagination utility** — `fetchAllPages` with safety caps (500 records, 20 pages max, inter-page delay)
+- **Enhanced date handling** — all collection tools accept relative expressions ("today", "last 7 days", "this week", "last month")
+- **Statistics utility** — mean, median, std deviation, linear regression, anomaly detection (pure TypeScript, no deps)
+
+### Changed
+- Collection tool descriptions updated to document relative date expression support
+- Tool count: 6 → 12
+- Resource count: 0 → 4
+- Prompt count: 0 → 5
+- Test count: 217 → 430+
+
 ## [0.2.0] - 2026-04-14
 
 ### Fixed

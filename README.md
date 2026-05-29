@@ -218,8 +218,8 @@ Get recovery scores for a date range. Returns HRV, resting heart rate, SpO2, and
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `start` | string | No | Return records after this time (inclusive). ISO 8601 format. |
-| `end` | string | No | Return records before this time (exclusive). Defaults to now. |
+| `start` | string | No | ISO 8601 or relative expression ("today", "last 7 days", "this week"). |
+| `end` | string | No | ISO 8601 or relative expression. Defaults to now. |
 | `limit` | number | No | Max records to return (1–25). Defaults to 10. |
 | `nextToken` | string | No | Pagination token from a previous response. |
 
@@ -233,8 +233,8 @@ Get sleep records for a date range. Returns sleep stages, duration, respiratory 
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `start` | string | No | Return records after this time (inclusive). ISO 8601 format. |
-| `end` | string | No | Return records before this time (exclusive). Defaults to now. |
+| `start` | string | No | ISO 8601 or relative expression ("today", "last 7 days", "this week"). |
+| `end` | string | No | ISO 8601 or relative expression. Defaults to now. |
 | `limit` | number | No | Max records to return (1–25). Defaults to 10. |
 | `nextToken` | string | No | Pagination token from a previous response. |
 
@@ -248,8 +248,8 @@ Get workout records for a date range. Returns strain, heart rate zones, calories
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `start` | string | No | Return records after this time (inclusive). ISO 8601 format. |
-| `end` | string | No | Return records before this time (exclusive). Defaults to now. |
+| `start` | string | No | ISO 8601 or relative expression ("today", "last 7 days", "this week"). |
+| `end` | string | No | ISO 8601 or relative expression. Defaults to now. |
 | `limit` | number | No | Max records to return (1–25). Defaults to 10. |
 | `nextToken` | string | No | Pagination token from a previous response. |
 
@@ -263,10 +263,117 @@ Get physiological cycles for a date range. Returns strain, calories, and heart r
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `start` | string | No | Return records after this time (inclusive). ISO 8601 format. |
-| `end` | string | No | Return records before this time (exclusive). Defaults to now. |
+| `start` | string | No | ISO 8601 or relative expression ("today", "last 7 days", "this week"). |
+| `end` | string | No | ISO 8601 or relative expression. Defaults to now. |
 | `limit` | number | No | Max records to return (1–25). Defaults to 10. |
 | `nextToken` | string | No | Pagination token from a previous response. |
+
+---
+
+### `get_sleep_by_id`
+
+Get a single sleep record by ID. Returns sleep stages, duration, respiratory rate, and performance scores.
+
+**Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `id` | string | Yes | The sleep record ID. |
+
+---
+
+### `get_workout_by_id`
+
+Get a single workout record by ID. Returns strain, heart rate zones, calories, and sport type.
+
+**Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `id` | string | Yes | The workout record ID. |
+
+---
+
+### `get_cycle_by_id`
+
+Get a single physiological cycle by ID. Returns strain, calories, and heart rate data.
+
+**Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `id` | number | Yes | The cycle record ID. |
+
+---
+
+### `get_weekly_summary`
+
+Get a summarized health report for a given week — average recovery, HRV, RHR, sleep duration and quality, workout count and strain, plus recovery trend direction.
+
+**Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `week_start` | string | No | ISO 8601 or relative expression ("last week", "this week"). Defaults to most recent Monday. |
+
+---
+
+### `compare_periods`
+
+Compare health metrics between two time periods — shows improvement or regression in recovery, sleep, and strain.
+
+**Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `period_a_start` | string | Yes | ISO 8601 start of the first period. |
+| `period_a_end` | string | Yes | ISO 8601 end of the first period. |
+| `period_b_start` | string | Yes | ISO 8601 start of the second period. |
+| `period_b_end` | string | Yes | ISO 8601 end of the second period. |
+
+---
+
+### `get_trend`
+
+Analyze a health metric trend over time — detects direction (improving/declining/stable), variability, and anomalies using linear regression.
+
+**Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `metric` | string | Yes | One of: `recovery`, `hrv`, `rhr`, `sleep_duration`, `sleep_performance`, `strain`. |
+| `days` | number | No | Number of days to analyze (7–90). Default: 30. |
+
+---
+
+## Resources
+
+MCP Resources provide ambient health context — AI assistants can read your current health state without explicit tool calls.
+
+| Resource URI | Description | Cache TTL |
+|--------------|-------------|-----------|
+| `whoop://v2/user/recovery/latest` | Most recent recovery score, HRV, RHR | 5 min |
+| `whoop://v2/user/sleep/latest` | Most recent sleep record | 5 min |
+| `whoop://v2/user/cycle/latest` | Current physiological cycle (strain) | 5 min |
+| `whoop://v2/user/profile` | User profile (name, email) | 1 hr |
+
+**Privacy:** Resources expose the same data available through tools — they simply make it accessible as ambient context. No additional WHOOP scopes are required. Data is cached in-memory with short TTLs and invalidated on token refresh.
+
+To disable resources: set `WHOOP_MCP_DISABLE_RESOURCES=1`.
+
+---
+
+## Prompts
+
+Pre-built conversation starters that guide you into useful health queries:
+
+| Prompt | Description |
+|--------|-------------|
+| `weekly_health_review` | Comprehensive review of recovery, sleep, and workouts (accepts optional `days` arg) |
+| `sleep_analysis` | Analyze recent sleep patterns and quality |
+| `recovery_trend` | How is recovery trending? HRV, RHR, recovery score analysis |
+| `workout_recap` | Summarize recent workouts, strain, and training load |
+| `health_check` | Quick health status using cached resource data |
 
 ## Authentication
 

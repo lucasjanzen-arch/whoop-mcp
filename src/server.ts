@@ -68,12 +68,14 @@ const collectionInputSchema = z.object({
     .string()
     .optional()
     .describe(
-      "Return records after this time (inclusive). ISO 8601 format, e.g. 2026-04-01T00:00:00.000Z"
+      'Return records after this time (inclusive). ISO 8601 format or relative expression (e.g. "today", "last 7 days", "this week").'
     ),
   end: z
     .string()
     .optional()
-    .describe("Return records before this time (exclusive). ISO 8601 format. Defaults to now."),
+    .describe(
+      'Return records before this time (exclusive). ISO 8601 format or relative expression. Defaults to now.'
+    ),
   limit: z
     .number()
     .int()
@@ -203,7 +205,7 @@ export function createWhoopServer(client: WhoopClient, options?: CreateServerOpt
     "get_recovery_collection",
     {
       description:
-        "Get recovery scores for a date range. Returns HRV, resting heart rate, SpO2, and skin temp for each day.",
+        'Get recovery scores for a date range. Accepts ISO 8601 or relative dates ("today", "last 7 days", "this week"). Returns HRV, resting heart rate, SpO2, and skin temp for each day.',
       inputSchema: collectionInputSchema,
       annotations: { readOnlyHint: true },
     },
@@ -218,7 +220,7 @@ export function createWhoopServer(client: WhoopClient, options?: CreateServerOpt
     "get_sleep_collection",
     {
       description:
-        "Get sleep records for a date range. Returns sleep stages, duration, respiratory rate, and performance scores.",
+        'Get sleep records for a date range. Accepts ISO 8601 or relative dates ("today", "last 7 days", "this week"). Returns sleep stages, duration, respiratory rate, and performance scores.',
       inputSchema: collectionInputSchema,
       annotations: { readOnlyHint: true },
     },
@@ -233,7 +235,7 @@ export function createWhoopServer(client: WhoopClient, options?: CreateServerOpt
     "get_workout_collection",
     {
       description:
-        "Get workout records for a date range. Returns strain, heart rate zones, calories, and sport type.",
+        'Get workout records for a date range. Accepts ISO 8601 or relative dates ("today", "last 7 days", "this week"). Returns strain, heart rate zones, calories, and sport type.',
       inputSchema: collectionInputSchema,
       annotations: { readOnlyHint: true },
     },
@@ -248,7 +250,7 @@ export function createWhoopServer(client: WhoopClient, options?: CreateServerOpt
     "get_cycle_collection",
     {
       description:
-        "Get physiological cycles for a date range. Returns strain, calories, and heart rate data per cycle.",
+        'Get physiological cycles for a date range. Accepts ISO 8601 or relative dates ("today", "last 7 days", "this week"). Returns strain, calories, and heart rate data per cycle.',
       inputSchema: collectionInputSchema,
       annotations: { readOnlyHint: true },
     },

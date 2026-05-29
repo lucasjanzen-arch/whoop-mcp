@@ -2,10 +2,10 @@
  * Tests for collection-utils.ts — buildCollectionQuery.
  *
  * Covers edge cases: empty params, all params, single param,
- * undefined values omitted.
+ * undefined values omitted, and enhanced date expression resolution.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { buildCollectionQuery } from "../../src/tools/collection-utils.js";
 
 describe("buildCollectionQuery", () => {
@@ -107,5 +107,46 @@ describe("buildCollectionQuery", () => {
     const query = buildCollectionQuery({ limit: 5 });
 
     expect(query.startsWith("?")).toBe(true);
+  });
+
+  describe("enhanced date resolution", () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-05-28T12:00:00.000Z"));
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("resolves 'today' in start to ISO 8601 start-of-day", () => {
+      const query = buildCollectionQuery({ start: "today" });
+      const params = new URLSearchParams(query.slice(1));
+      expect(params.get("start")).toBe("2026-05-28T00:00:00.000Z");
+    });
+
+    it("resolves 'today' in end to ISO 8601 end-of-day", () => {
+      const query = buildCollectionQuery({ end: "today" });
+      const params = new URLSearchParams(query.slice(1));
+      expect(params.get("end")).toBe("2026-05-28T23:59:59.999Z");
+    });
+
+    it("resolves 'last 7 days' in start to 7 days ago", () => {
+      const query = buildCollectionQuery({ start: "last 7 days" });
+      const params = new URLSearchParams(query.slice(1));
+      expect(params.get("start")).toBe("2026-05-21T00:00:00.000Z");
+    });
+
+    it("passes through ISO 8601 strings unchanged", () => {
+      const query = buildCollectionQuery({ start: "2026-04-01T00:00:00.000Z" });
+      const params = new URLSearchParams(query.slice(1));
+      expect(params.get("start")).toBe("2026-04-01T00:00:00.000Z");
+    });
+
+    it("throws InvalidDateExpression for unrecognized expressions", () => {
+      expect(() => buildCollectionQuery({ start: "next tuesday" })).toThrow(
+        "Unrecognized date expression"
+      );
+    });
   });
 });

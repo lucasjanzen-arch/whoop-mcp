@@ -3,7 +3,12 @@
  *
  * All 4 collection tools (recovery, sleep, workout, cycle) use the same
  * query parameter shape and query string building logic.
+ *
+ * Enhanced date expressions ("today", "last 7 days", etc.) are resolved
+ * to ISO 8601 before sending to the WHOOP API.
  */
+
+import { resolveDateExpression, InvalidDateExpression } from "./date-utils.js";
 
 /** Input params shared by all collection endpoints */
 export interface CollectionParams {
@@ -14,7 +19,44 @@ export interface CollectionParams {
 }
 
 /**
+ * Resolve a date expression to an ISO 8601 start value.
+ * If already ISO 8601, passes through unchanged.
+ * Returns undefined if input is undefined.
+ */
+function resolveStart(value: string | undefined): string | undefined {
+  if (value === undefined) return undefined;
+  try {
+    const resolved = resolveDateExpression(value);
+    return resolved.start;
+  } catch (e) {
+    if (e instanceof InvalidDateExpression) {
+      throw e;
+    }
+    return value;
+  }
+}
+
+/**
+ * Resolve a date expression to an ISO 8601 end value.
+ * If already ISO 8601, passes through unchanged.
+ * Returns undefined if input is undefined.
+ */
+function resolveEnd(value: string | undefined): string | undefined {
+  if (value === undefined) return undefined;
+  try {
+    const resolved = resolveDateExpression(value);
+    return resolved.end;
+  } catch (e) {
+    if (e instanceof InvalidDateExpression) {
+      throw e;
+    }
+    return value;
+  }
+}
+
+/**
  * Build a query string from collection params.
+ * Resolves enhanced date expressions in start/end to ISO 8601.
  * Omits undefined values. Returns empty string if no params are set.
  *
  * @param params - Optional collection query parameters
@@ -23,11 +65,14 @@ export interface CollectionParams {
 export function buildCollectionQuery(params: CollectionParams): string {
   const searchParams = new URLSearchParams();
 
-  if (params.start !== undefined) {
-    searchParams.set("start", params.start);
+  const start = resolveStart(params.start);
+  const end = resolveEnd(params.end);
+
+  if (start !== undefined) {
+    searchParams.set("start", start);
   }
-  if (params.end !== undefined) {
-    searchParams.set("end", params.end);
+  if (end !== undefined) {
+    searchParams.set("end", end);
   }
   if (params.limit !== undefined) {
     searchParams.set("limit", String(params.limit));
