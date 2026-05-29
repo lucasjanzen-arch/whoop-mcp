@@ -212,7 +212,7 @@ describe("createWhoopServer", () => {
 
   beforeAll(async () => {
     const mockWhoopClient = createMockClient();
-    const server = createWhoopServer(mockWhoopClient);
+    const { server } = createWhoopServer(mockWhoopClient);
 
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
 
@@ -513,7 +513,7 @@ describe("createWhoopServer (error handling)", () => {
         throw error;
       },
     };
-    const server = createWhoopServer(errorClient);
+    const { server } = createWhoopServer(errorClient);
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
     const mcpClient = new Client({ name: "error-test-client", version: "1.0.0" });
     await Promise.all([mcpClient.connect(clientTransport), server.connect(serverTransport)]);
@@ -631,7 +631,7 @@ describe("createWhoopServer (error handling)", () => {
         throw "a string, not an Error";
       },
     };
-    const server = createWhoopServer(nonErrorClient);
+    const { server } = createWhoopServer(nonErrorClient);
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
     const mcpClient = new Client({ name: "non-error-test", version: "1.0.0" });
     await Promise.all([mcpClient.connect(clientTransport), server.connect(serverTransport)]);
@@ -642,6 +642,123 @@ describe("createWhoopServer (error handling)", () => {
       expect(result.isError).toBe(true);
       const content = result.content as Array<{ type: string; text: string }>;
       expect(content[0].text).toBe("An unexpected error occurred");
+    } finally {
+      await mcpClient.close();
+      await server.close();
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// MCP Resources
+// ---------------------------------------------------------------------------
+
+describe("createWhoopServer (resources)", () => {
+  let client: Client;
+  let cleanup: () => Promise<void>;
+
+  beforeAll(async () => {
+    const mockWhoopClient = createMockClient();
+    const { server } = createWhoopServer(mockWhoopClient);
+
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    client = new Client({ name: "resource-test-client", version: "1.0.0" });
+    await Promise.all([client.connect(clientTransport), server.connect(serverTransport)]);
+
+    cleanup = async () => {
+      await client.close();
+      await server.close();
+    };
+  });
+
+  afterAll(async () => {
+    await cleanup();
+  });
+
+  it("lists exactly 4 resources", async () => {
+    const result = await client.listResources();
+    expect(result.resources).toHaveLength(4);
+  });
+
+  it("lists resources with correct URIs", async () => {
+    const result = await client.listResources();
+    const uris = result.resources.map((r) => r.uri).sort();
+
+    expect(uris).toEqual([
+      "whoop://v2/user/cycle/latest",
+      "whoop://v2/user/profile",
+      "whoop://v2/user/recovery/latest",
+      "whoop://v2/user/sleep/latest",
+    ]);
+  });
+
+  it("all resources have descriptions and mimeType", async () => {
+    const result = await client.listResources();
+    for (const resource of result.resources) {
+      expect(resource.description).toBeTruthy();
+      expect(resource.mimeType).toBe("application/json");
+    }
+  });
+
+  it("reads recovery/latest and returns JSON content", async () => {
+    const result = await client.readResource({ uri: "whoop://v2/user/recovery/latest" });
+
+    expect(result.contents).toHaveLength(1);
+    const content = result.contents[0]!;
+    expect(content.uri).toBe("whoop://v2/user/recovery/latest");
+    expect(content.mimeType).toBe("application/json");
+    expect("text" in content).toBe(true);
+
+    const parsed = JSON.parse((content as { text: string }).text) as unknown;
+    expect(parsed).toEqual(RECOVERY_FIXTURE.records[0]);
+  });
+
+  it("reads sleep/latest and returns JSON content", async () => {
+    const result = await client.readResource({ uri: "whoop://v2/user/sleep/latest" });
+
+    expect(result.contents).toHaveLength(1);
+    const content = result.contents[0]!;
+    const parsed = JSON.parse((content as { text: string }).text) as unknown;
+    expect(parsed).toEqual(SLEEP_FIXTURE.records[0]);
+  });
+
+  it("reads cycle/latest and returns JSON content", async () => {
+    const result = await client.readResource({ uri: "whoop://v2/user/cycle/latest" });
+
+    expect(result.contents).toHaveLength(1);
+    const content = result.contents[0]!;
+    const parsed = JSON.parse((content as { text: string }).text) as unknown;
+    expect(parsed).toEqual(CYCLE_FIXTURE.records[0]);
+  });
+
+  it("reads profile and returns JSON content", async () => {
+    const result = await client.readResource({ uri: "whoop://v2/user/profile" });
+
+    expect(result.contents).toHaveLength(1);
+    const content = result.contents[0]!;
+    const parsed = JSON.parse((content as { text: string }).text) as unknown;
+    expect(parsed).toEqual(PROFILE_FIXTURE);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Resources disabled via option
+// ---------------------------------------------------------------------------
+
+describe("createWhoopServer (resources disabled)", () => {
+  it("does not register resources when disableResources is true", async () => {
+    const mockWhoopClient = createMockClient();
+    const { server, resourceCache } = createWhoopServer(mockWhoopClient, { disableResources: true });
+
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    const mcpClient = new Client({ name: "no-resources-test", version: "1.0.0" });
+    await Promise.all([mcpClient.connect(clientTransport), server.connect(serverTransport)]);
+
+    try {
+      // When no resources are registered, the server doesn't advertise the
+      // resources capability, so listResources throws "Method not found".
+      await expect(mcpClient.listResources()).rejects.toThrow("Method not found");
+      expect(resourceCache).toBeNull();
     } finally {
       await mcpClient.close();
       await server.close();

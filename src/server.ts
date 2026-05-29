@@ -18,6 +18,7 @@ import { getCycleCollection } from "./tools/get-cycle.js";
 import { getSleepById } from "./tools/get-sleep-by-id.js";
 import { getWorkoutById } from "./tools/get-workout-by-id.js";
 import { getCycleById } from "./tools/get-cycle-by-id.js";
+import { registerResources, type ResourceCache } from "./resources/index.js";
 import { readFileSync } from "node:fs";
 
 // ---------------------------------------------------------------------------
@@ -139,16 +140,29 @@ async function safeTool<T>(
 // Server factory
 // ---------------------------------------------------------------------------
 
+/** Options for createWhoopServer */
+export interface CreateServerOptions {
+  /** Disable MCP resource registration (set via WHOOP_MCP_DISABLE_RESOURCES=1) */
+  disableResources?: boolean;
+}
+
+/** Return type includes the cache for token-refresh invalidation */
+export interface WhoopServer {
+  server: McpServer;
+  resourceCache: ResourceCache | null;
+}
+
 /**
- * Create a configured MCP server with all 6 WHOOP tools registered.
+ * Create a configured MCP server with all WHOOP tools and resources registered.
  *
  * This is a pure factory — it does not start transports, handle OAuth,
  * or read environment variables. Connect the returned server to any
  * transport (stdio, InMemoryTransport, MCP Inspector).
  *
  * @param client - WHOOP API client used by tool handlers
+ * @param options - Optional configuration (e.g., disable resources)
  */
-export function createWhoopServer(client: WhoopClient): McpServer {
+export function createWhoopServer(client: WhoopClient, options?: CreateServerOptions): WhoopServer {
   const server = new McpServer({
     name: "whoop-mcp",
     version: getPackageVersion(),
@@ -283,5 +297,13 @@ export function createWhoopServer(client: WhoopClient): McpServer {
       safeTool(() => getCycleById(client, args.id))
   );
 
-  return server;
+  // -------------------------------------------------------------------------
+  // MCP Resources
+  // -------------------------------------------------------------------------
+  let resourceCache: ResourceCache | null = null;
+  if (!options?.disableResources) {
+    resourceCache = registerResources(server, client);
+  }
+
+  return { server, resourceCache };
 }

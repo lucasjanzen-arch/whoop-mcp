@@ -73,7 +73,7 @@ function setupHappyPath(): void {
   const mockClient = { get: vi.fn() };
   mockCreateWhoopClient.mockReturnValue(mockClient);
   const mockServer = { connect: mockConnect };
-  mockCreateWhoopServer.mockReturnValue(mockServer);
+  mockCreateWhoopServer.mockReturnValue({ server: mockServer, resourceCache: null });
   mockConnect.mockResolvedValue(undefined);
   MockStdioServerTransport.mockReturnValue(mockStdioTransportInstance);
 }
@@ -269,6 +269,53 @@ describe("main() entry point", () => {
       };
       await expect(clientOptions.onTokenRefresh()).rejects.toThrow(/no stored tokens/i);
     });
+
+    it("invalidates resource cache on token refresh", async () => {
+      setupHappyPath();
+
+      // Make createWhoopServer return a mock cache
+      const mockInvalidateAll = vi.fn();
+      const mockServer = { connect: mockConnect };
+      mockCreateWhoopServer.mockReturnValue({
+        server: mockServer,
+        resourceCache: { invalidateAll: mockInvalidateAll },
+      });
+
+      const storedTokens = {
+        access_token: "old-access",
+        refresh_token: "stored-refresh-token",
+        expires_at: Date.now() - 1000,
+        token_type: "Bearer",
+      };
+      mockLoadTokens.mockResolvedValue(storedTokens);
+
+      const refreshResponse = {
+        access_token: "new-access-token",
+        refresh_token: "new-refresh-token",
+        expires_in: 3600,
+        token_type: "Bearer",
+        scope: "read:recovery",
+      };
+      mockRefreshAccessToken.mockResolvedValue(refreshResponse);
+      mockToOAuthTokens.mockReturnValue({
+        access_token: "new-access-token",
+        refresh_token: "new-refresh-token",
+        expires_at: Date.now() + 3_600_000,
+        token_type: "Bearer",
+      });
+      mockSaveTokens.mockResolvedValue(undefined);
+
+      const { main } = await importMain();
+      await main();
+
+      // Extract the onTokenRefresh callback and invoke it
+      const clientOptions = mockCreateWhoopClient.mock.calls[0][0] as {
+        onTokenRefresh: () => Promise<string>;
+      };
+      await clientOptions.onTokenRefresh();
+
+      expect(mockInvalidateAll).toHaveBeenCalledOnce();
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -285,7 +332,7 @@ describe("main() entry point", () => {
       await main();
 
       expect(mockCreateWhoopServer).toHaveBeenCalledOnce();
-      expect(mockCreateWhoopServer).toHaveBeenCalledWith(mockClient);
+      expect(mockCreateWhoopServer).toHaveBeenCalledWith(mockClient, { disableResources: false });
     });
 
     it("creates a StdioServerTransport", async () => {

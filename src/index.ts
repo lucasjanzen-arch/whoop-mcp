@@ -58,7 +58,11 @@ export async function main(): Promise<void> {
   const accessToken = await authenticate(oauthConfig);
   console.error("Authentication successful.");
 
-  // 3. Create the WHOOP API client with automatic token refresh
+  // 3. Create the WHOOP API client with automatic token refresh.
+  //    We use a mutable holder for the resource cache so token refresh
+  //    can invalidate it (cache is created after client).
+  let resourceCacheRef: { invalidateAll(): void } | null = null;
+
   const onTokenRefresh = async (): Promise<string> => {
     const tokens = await loadTokens();
     if (!tokens) {
@@ -71,13 +75,18 @@ export async function main(): Promise<void> {
     const newTokens = toOAuthTokens(refreshed, tokens.refresh_token);
     await saveTokens(newTokens);
 
+    // Invalidate resource cache on token refresh
+    resourceCacheRef?.invalidateAll();
+
     return newTokens.access_token;
   };
 
   const client = createWhoopClient({ accessToken, onTokenRefresh });
 
-  // 4. Create the MCP server with all 6 WHOOP tools
-  const server = createWhoopServer(client);
+  // 4. Create the MCP server with all WHOOP tools and resources
+  const disableResources = process.env.WHOOP_MCP_DISABLE_RESOURCES === "1";
+  const { server, resourceCache } = createWhoopServer(client, { disableResources });
+  resourceCacheRef = resourceCache;
 
   // 5. Connect to stdio transport (stdin/stdout = MCP channel)
   const transport = new StdioServerTransport();
