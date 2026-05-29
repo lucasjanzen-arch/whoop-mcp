@@ -15,6 +15,9 @@ import { getRecoveryCollection } from "./tools/get-recovery.js";
 import { getSleepCollection } from "./tools/get-sleep.js";
 import { getWorkoutCollection } from "./tools/get-workout.js";
 import { getCycleCollection } from "./tools/get-cycle.js";
+import { getSleepById } from "./tools/get-sleep-by-id.js";
+import { getWorkoutById } from "./tools/get-workout-by-id.js";
+import { getCycleById } from "./tools/get-cycle-by-id.js";
 import { readFileSync } from "node:fs";
 
 // ---------------------------------------------------------------------------
@@ -36,6 +39,23 @@ function getPackageVersion(): string {
 // ---------------------------------------------------------------------------
 // Shared schemas
 // ---------------------------------------------------------------------------
+
+/** Input schema for string ID lookup (sleep, workout) */
+const stringIdSchema = z.object({
+  id: z
+    .string()
+    .regex(/^[a-zA-Z0-9_-]+$/, "ID must contain only alphanumeric characters, hyphens, and underscores")
+    .describe("The record ID to look up."),
+});
+
+/** Input schema for numeric ID lookup (cycle) */
+const numericIdSchema = z.object({
+  id: z
+    .number()
+    .int()
+    .positive()
+    .describe("The record ID to look up."),
+});
 
 /** Input schema shared by all collection endpoints (recovery, sleep, workout, cycle) */
 const collectionInputSchema = z.object({
@@ -216,6 +236,51 @@ export function createWhoopServer(client: WhoopClient): McpServer {
     },
     async (args: z.infer<typeof collectionInputSchema>) =>
       safeTool(() => getCycleCollection(client, args))
+  );
+
+  // -------------------------------------------------------------------------
+  // Tool 7: get_sleep_by_id
+  // -------------------------------------------------------------------------
+  server.registerTool(
+    "get_sleep_by_id",
+    {
+      description:
+        "Get a single sleep record by its ID. Returns sleep stages, duration, respiratory rate, and performance scores.",
+      inputSchema: stringIdSchema,
+      annotations: { readOnlyHint: true },
+    },
+    async (args: z.infer<typeof stringIdSchema>) =>
+      safeTool(() => getSleepById(client, args.id))
+  );
+
+  // -------------------------------------------------------------------------
+  // Tool 8: get_workout_by_id
+  // -------------------------------------------------------------------------
+  server.registerTool(
+    "get_workout_by_id",
+    {
+      description:
+        "Get a single workout record by its ID. Returns strain, heart rate zones, calories, and sport type.",
+      inputSchema: stringIdSchema,
+      annotations: { readOnlyHint: true },
+    },
+    async (args: z.infer<typeof stringIdSchema>) =>
+      safeTool(() => getWorkoutById(client, args.id))
+  );
+
+  // -------------------------------------------------------------------------
+  // Tool 9: get_cycle_by_id
+  // -------------------------------------------------------------------------
+  server.registerTool(
+    "get_cycle_by_id",
+    {
+      description:
+        "Get a single physiological cycle by its ID. Returns strain, calories, and heart rate data.",
+      inputSchema: numericIdSchema,
+      annotations: { readOnlyHint: true },
+    },
+    async (args: z.infer<typeof numericIdSchema>) =>
+      safeTool(() => getCycleById(client, args.id))
   );
 
   return server;

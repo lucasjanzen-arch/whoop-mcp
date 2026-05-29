@@ -11,6 +11,9 @@ import type {
   SleepCollection,
   WorkoutCollection,
   CycleCollection,
+  Sleep,
+  Workout,
+  Cycle,
 } from "../src/api/types.js";
 
 // ---------------------------------------------------------------------------
@@ -146,6 +149,14 @@ const CYCLE_FIXTURE: CycleCollection = {
 };
 
 // ---------------------------------------------------------------------------
+// Individual record fixtures
+// ---------------------------------------------------------------------------
+
+const SLEEP_BY_ID_FIXTURE: Sleep = SLEEP_FIXTURE.records[0];
+const WORKOUT_BY_ID_FIXTURE: Workout = WORKOUT_FIXTURE.records[0];
+const CYCLE_BY_ID_FIXTURE: Cycle = CYCLE_FIXTURE.records[0];
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
@@ -159,17 +170,34 @@ const ENDPOINT_FIXTURES: Record<string, unknown> = {
   "/v2/cycle": CYCLE_FIXTURE,
 };
 
+/** Prefix-to-fixture mapping for individual record lookups */
+const ID_LOOKUP_PREFIXES: Array<{ prefix: string; fixture: unknown }> = [
+  { prefix: "/v2/activity/sleep/", fixture: SLEEP_BY_ID_FIXTURE },
+  { prefix: "/v2/activity/workout/", fixture: WORKOUT_BY_ID_FIXTURE },
+  { prefix: "/v2/cycle/", fixture: CYCLE_BY_ID_FIXTURE },
+];
+
 /** Mock WhoopClient that returns fixture data based on the endpoint path */
 function createMockClient(): WhoopClient {
   return {
     get: async <T>(path: string): Promise<T> => {
       // Strip query string to match base endpoint
       const basePath = path.split("?")[0];
+
+      // Check exact match first (collection endpoints)
       const fixture = ENDPOINT_FIXTURES[basePath];
-      if (!fixture) {
-        throw new Error(`Mock client: unexpected endpoint ${path}`);
+      if (fixture) {
+        return fixture as T;
       }
-      return fixture as T;
+
+      // Check prefix match for ID lookups
+      for (const { prefix, fixture: idFixture } of ID_LOOKUP_PREFIXES) {
+        if (basePath.startsWith(prefix)) {
+          return idFixture as T;
+        }
+      }
+
+      throw new Error(`Mock client: unexpected endpoint ${path}`);
     },
   };
 }
@@ -207,10 +235,10 @@ describe("createWhoopServer", () => {
   // -------------------------------------------------------------------------
 
   describe("tools/list", () => {
-    it("returns exactly 6 tools", async () => {
+    it("returns exactly 9 tools", async () => {
       const result = await client.listTools();
 
-      expect(result.tools).toHaveLength(6);
+      expect(result.tools).toHaveLength(9);
     });
 
     it("returns tools with the correct names", async () => {
@@ -219,10 +247,13 @@ describe("createWhoopServer", () => {
 
       expect(names).toEqual([
         "get_body_measurement",
+        "get_cycle_by_id",
         "get_cycle_collection",
         "get_profile",
         "get_recovery_collection",
+        "get_sleep_by_id",
         "get_sleep_collection",
+        "get_workout_by_id",
         "get_workout_collection",
       ]);
     });
@@ -385,6 +416,82 @@ describe("createWhoopServer", () => {
       const content = result.content as Array<{ type: string; text: string }>;
       const parsed = JSON.parse(content[0].text) as unknown;
       expect(parsed).toEqual(CYCLE_FIXTURE);
+    });
+
+    it("get_sleep_by_id returns a single sleep record", async () => {
+      const result = await client.callTool({
+        name: "get_sleep_by_id",
+        arguments: { id: "sleep-1" },
+      });
+
+      expect(result.isError).toBeFalsy();
+      const content = result.content as Array<{ type: string; text: string }>;
+      const parsed = JSON.parse(content[0].text) as unknown;
+      expect(parsed).toEqual(SLEEP_BY_ID_FIXTURE);
+    });
+
+    it("get_workout_by_id returns a single workout record", async () => {
+      const result = await client.callTool({
+        name: "get_workout_by_id",
+        arguments: { id: "workout-1" },
+      });
+
+      expect(result.isError).toBeFalsy();
+      const content = result.content as Array<{ type: string; text: string }>;
+      const parsed = JSON.parse(content[0].text) as unknown;
+      expect(parsed).toEqual(WORKOUT_BY_ID_FIXTURE);
+    });
+
+    it("get_cycle_by_id returns a single cycle record", async () => {
+      const result = await client.callTool({
+        name: "get_cycle_by_id",
+        arguments: { id: 200 },
+      });
+
+      expect(result.isError).toBeFalsy();
+      const content = result.content as Array<{ type: string; text: string }>;
+      const parsed = JSON.parse(content[0].text) as unknown;
+      expect(parsed).toEqual(CYCLE_BY_ID_FIXTURE);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Input schemas — ID lookup tools
+  // -------------------------------------------------------------------------
+
+  describe("get_sleep_by_id schema", () => {
+    it("has a required id property of type string", async () => {
+      const result = await client.listTools();
+      const tool = result.tools.find((t) => t.name === "get_sleep_by_id");
+
+      expect(tool).toBeDefined();
+      const props = tool!.inputSchema.properties as Record<string, { type: string }>;
+      expect(props).toHaveProperty("id");
+      expect(props.id.type).toBe("string");
+    });
+  });
+
+  describe("get_workout_by_id schema", () => {
+    it("has a required id property of type string", async () => {
+      const result = await client.listTools();
+      const tool = result.tools.find((t) => t.name === "get_workout_by_id");
+
+      expect(tool).toBeDefined();
+      const props = tool!.inputSchema.properties as Record<string, { type: string }>;
+      expect(props).toHaveProperty("id");
+      expect(props.id.type).toBe("string");
+    });
+  });
+
+  describe("get_cycle_by_id schema", () => {
+    it("has a required id property of type integer", async () => {
+      const result = await client.listTools();
+      const tool = result.tools.find((t) => t.name === "get_cycle_by_id");
+
+      expect(tool).toBeDefined();
+      const props = tool!.inputSchema.properties as Record<string, { type: string }>;
+      expect(props).toHaveProperty("id");
+      expect(props.id.type).toBe("integer");
     });
   });
 });
