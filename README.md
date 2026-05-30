@@ -33,7 +33,7 @@ _Based on npm search results for `whoop mcp` on 2026-05-30._
 
 | Package | Latest version | Last publish (UTC) | MCP Registry | Runtime deps | npm |
 |------|-----------------|--------------------|----|--------------|-----|
-| **whoop-ai-mcp (this repo)** | **0.3.0** | **2026-05-29** | **✅ `io.github.shashankswe2020-ux/whoop`** | **2** | https://www.npmjs.com/package/whoop-ai-mcp |
+| **whoop-ai-mcp (this repo)** | **0.3.1** | **2026-05-30** | **✅ `io.github.shashankswe2020-ux/whoop`** | **2** | https://www.npmjs.com/package/whoop-ai-mcp |
 | whoop-mcp-unofficial | 0.4.5 | 2026-05-29 | — | 5 | https://www.npmjs.com/package/whoop-mcp-unofficial |
 | @nchemb/whoop-mcp | 0.2.0 | 2026-04-27 | — | 4 | https://www.npmjs.com/package/@nchemb/whoop-mcp |
 | @scom82/whoop-mcp | 0.1.0 | 2026-05-17 | — | 1 | https://www.npmjs.com/package/@scom82/whoop-mcp |
