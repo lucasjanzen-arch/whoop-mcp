@@ -155,6 +155,14 @@ Then ask Claude something like:
 
 ![Claude chat with whoop-mcp integrated](images/Claude-chat-with-whoop-mcp-integrated.png)
 
+**Weekly Health Report demo (Claude Desktop):**
+
+![Weekly health report — asking Claude](images/Screenshot%202026-05-30%20at%201.36.39%E2%80%AFPM.png)
+
+![Recommendations and breakdowns](images/Screenshot%202026-05-30%20at%201.37.06%E2%80%AFPM.png)
+
+![summary and connector view](images/Screenshot%202026-05-30%20at%201.37.39%E2%80%AFPM.png)
+
 ## Installation
 
 ### Via npx (recommended)
