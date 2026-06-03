@@ -534,13 +534,41 @@ describe("openBrowser", () => {
   });
 
   it("does not use shell interpolation (no injection risk)", () => {
-    const maliciousUrl = 'https://example.com"; rm -rf / #';
+    // Shell metacharacters live in the path/query so the URL still parses
+    // as https: — the point is that spawn receives them as a single argv
+    // entry, never interpolated into a shell string.
+    const maliciousUrl = "https://example.com/?q=$(rm%20-rf%20/);evil";
     openBrowser(maliciousUrl);
 
     expect(mockSpawn).toHaveBeenCalledOnce();
     // URL is passed as a separate argument, not interpolated into a shell string
     const args = mockSpawn.mock.calls[0] as unknown[];
     expect(args[1]).toContain(maliciousUrl);
+  });
+
+  it("rejects javascript: URLs before spawning", () => {
+    expect(() => openBrowser("javascript:alert(1)")).toThrow(/non-HTTP\(S\)/);
+    expect(mockSpawn).not.toHaveBeenCalled();
+  });
+
+  it("rejects file: URLs before spawning", () => {
+    expect(() => openBrowser("file:///etc/passwd")).toThrow(/non-HTTP\(S\)/);
+    expect(mockSpawn).not.toHaveBeenCalled();
+  });
+
+  it("rejects malformed URLs before spawning", () => {
+    expect(() => openBrowser("not a url")).toThrow();
+    expect(mockSpawn).not.toHaveBeenCalled();
+  });
+
+  it("accepts http:// URLs", () => {
+    openBrowser("http://example.com/auth");
+    expect(mockSpawn).toHaveBeenCalledOnce();
+  });
+
+  it("accepts https:// URLs", () => {
+    openBrowser("https://example.com/auth");
+    expect(mockSpawn).toHaveBeenCalledOnce();
   });
 
   it("attaches an error listener so async ENOENT does not crash the process", () => {

@@ -190,10 +190,15 @@ export function toOAuthTokens(response: TokenResponse, existingRefreshToken?: st
  * Open a URL in the user's default browser.
  *
  * Uses `spawn` with argument arrays to avoid shell injection.
- * Best-effort — if the open command fails, the URL is logged to stderr
- * so the user can copy/paste it manually. Never throws.
+ * Throws if the URL is malformed or not http(s) — callers must pass a
+ * trusted scheme. Otherwise best-effort: spawn errors are logged, not thrown.
  */
 export function openBrowser(url: string): void {
+  // Reject non-http(s) schemes (e.g. javascript:, file:, vbscript:) before spawn.
+  const parsed = new URL(url);
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new Error(`Refusing to open browser for non-HTTP(S) URL scheme: ${parsed.protocol}`);
+  }
   try {
     const commands: Record<string, [string, string[]]> = {
       darwin: ["open", [url]],
