@@ -507,6 +507,112 @@ Then open `http://localhost:6274` in your browser. The Inspector connects to the
 ![MCP Inspector — get_profile tool result](images/Screenshot%202026-04-12%20at%202.43.02%E2%80%AFAM.png)
 
 
+## Deployment (Docker + Cloud Hosting)
+
+The HTTP transport (`MCP_TRANSPORT=http`) makes this server suitable for remote
+hosting so that web/mobile MCP clients (e.g. claude.ai connectors) can connect
+to your personal WHOOP data over the network. A production-ready
+[Dockerfile](Dockerfile) is included.
+
+> **Security warning.** When running over HTTP you are exposing your WHOOP data
+> behind a single bearer token. Use a strong random `MCP_AUTH_TOKEN`
+> (`openssl rand -hex 32`), only deploy behind TLS, restrict
+> `MCP_ALLOWED_ORIGINS`, and treat the host as a personal-use deployment — not
+> a multi-tenant service.
+
+### Image characteristics
+
+- Multi-stage build on `node:22-alpine` (compressed pull size **~58 MB**;
+  uncompressed ~258 MB — the floor is set by the Node.js runtime itself).
+- Runs as the unprivileged built-in `node` user (UID 1000).
+- `tini` as PID 1 for clean signal forwarding (graceful shutdown).
+- Health check uses Node's native `fetch` against `/health` — no `curl`/`wget`
+  baked into the image.
+- All configuration is supplied at runtime via env vars; no secrets are baked
+  into image layers.
+
+### Build & run locally
+
+```bash
+docker build -t whoop-mcp .
+
+# Smoke test (runs node, prints "ok", exits)
+docker run --rm whoop-mcp node -e "console.log('ok')"
+
+# Run the HTTP server
+docker run --rm -p 3000:3000 \
+  -e MCP_AUTH_TOKEN="$(openssl rand -hex 32)" \
+  -e WHOOP_CLIENT_ID="your-client-id" \
+  -e WHOOP_CLIENT_SECRET="your-client-secret" \
+  -e MCP_ALLOWED_ORIGINS="https://claude.ai" \
+  whoop-mcp
+
+# Health check
+curl http://localhost:3000/health
+```
+
+Required env vars (HTTP mode):
+
+| Variable                | Required | Default      | Notes                                                       |
+| ----------------------- | -------- | ------------ | ----------------------------------------------------------- |
+| `MCP_TRANSPORT`         | no       | `http`       | Image default; override with `stdio` or `both` if needed.   |
+| `MCP_AUTH_TOKEN`        | **yes**  | —            | Bearer token clients must send. Generate ≥32 random bytes.  |
+| `WHOOP_CLIENT_ID`       | **yes**  | —            | From your WHOOP developer app.                              |
+| `WHOOP_CLIENT_SECRET`   | **yes**  | —            | From your WHOOP developer app.                              |
+| `MCP_PORT`              | no       | `3000`       | Listen port.                                                |
+| `MCP_HOST`              | no       | `0.0.0.0`    | Listen interface.                                           |
+| `MCP_ALLOWED_ORIGINS`   | no       | (none)       | Comma-separated CORS allowlist.                             |
+| `MCP_TRUST_PROXY`       | no       | `0`          | Set `1` when behind a reverse proxy (Fly/Railway).          |
+| `LOG_LEVEL`             | no       | `info`       | `debug`/`info`/`warn`/`error`.                              |
+| `LOG_FORMAT`            | no       | `json`       | `json` for prod, `pretty` for local dev.                    |
+
+### Fly.io
+
+[Fly.io](https://fly.io) deploys directly from the Dockerfile and gives you a
+free TLS-terminated public URL.
+
+```bash
+# One-time: install flyctl, sign in, and create the app from this repo's Dockerfile
+brew install flyctl
+fly auth login
+fly launch --no-deploy --copy-config --name whoop-mcp-<your-suffix>
+
+# Set secrets (these are encrypted and injected as env at runtime — never baked in)
+fly secrets set \
+  MCP_AUTH_TOKEN="$(openssl rand -hex 32)" \
+  WHOOP_CLIENT_ID="..." \
+  WHOOP_CLIENT_SECRET="..." \
+  MCP_TRUST_PROXY=1
+
+# Deploy
+fly deploy
+fly status
+fly logs
+```
+
+In your generated `fly.toml`, make sure the HTTP service points at port 3000
+and that `force_https = true` is set under `[[http_service]]`. Fly handles
+TLS termination, so `MCP_TRUST_PROXY=1` is required for accurate client IPs
+in logs and rate-limit decisions.
+
+### Railway
+
+[Railway](https://railway.app) auto-detects the Dockerfile.
+
+1. Create a new project from this GitHub repo (or `railway up` from a clone).
+2. In **Variables**, add `MCP_AUTH_TOKEN`, `WHOOP_CLIENT_ID`,
+   `WHOOP_CLIENT_SECRET`, and `MCP_TRUST_PROXY=1`.
+3. Under **Settings → Networking**, generate a public domain. Railway
+   terminates TLS for you.
+4. Deploy. Health check path: `/health`.
+
+### Other platforms
+
+The image is a stock OCI artifact and runs anywhere Docker does — Render, Cloud
+Run, Kubernetes, Hetzner, etc. The only platform-specific knob is
+`MCP_TRUST_PROXY=1` whenever you sit behind a TLS-terminating proxy.
+
+
 ## Development
 
 ### Setup

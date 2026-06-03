@@ -1,0 +1,47 @@
+# Build artifacts and dependencies are restored inside the image
+node_modules/
+dist/
+coverage/
+
+# Local dev / editor / OS junk
+.git/
+.github/
+.vscode/
+.idea/
+.DS_Store
+*.swp
+*.log
+*.tgz
+
+# Tests, examples, and source artifacts not needed at runtime
+tests/
+**/__tests__/
+**/*.test.ts
+**/*.spec.ts
+vitest.config.ts
+eslint.config.js
+.prettierrc*
+.eslintrc*
+
+# Documentation — not needed in the runtime image
+docs/
+images/
+references/
+*.md
+!package.json
+
+# Local secrets / env files — never bake these into images
+.env
+.env.*
+!.env.example
+.whoop-mcp/
+**/tokens.json
+
+# Misc
+CHANGELOG.md
+CONTRIBUTING.md
+SECURITY.md
+CODE_OF_CONDUCT.md
+LICENSE
+agent-usage-instructions.md
+server.json
