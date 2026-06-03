@@ -225,8 +225,26 @@ function isMainModule(): boolean {
 }
 
 if (isMainModule()) {
-  main().catch((error: unknown) => {
-    console.error("Fatal error:", error);
-    process.exit(1);
-  });
+  const subcommand = process.argv[2];
+
+  if (subcommand === "setup") {
+    // Lazy-load so the setup CLI's deps aren't pulled into the hot stdio path.
+    void (async (): Promise<void> => {
+      try {
+        const { runSetup, parseSetupArgs } = await import("./cli/setup.js");
+        const opts = parseSetupArgs(process.argv.slice(3));
+        await runSetup(opts);
+      } catch (error: unknown) {
+        console.error(
+          `Setup failed: ${error instanceof Error ? error.message : String(error)}`
+        );
+        process.exit(1);
+      }
+    })();
+  } else {
+    main().catch((error: unknown) => {
+      console.error("Fatal error:", error);
+      process.exit(1);
+    });
+  }
 }
