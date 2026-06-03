@@ -285,6 +285,11 @@ export function resolveDateExpression(expression: string): DateRange {
   const monthLiteralMatch = trimmed.match(MONTH_LITERAL_REGEX);
   if (monthLiteralMatch?.[1] && monthLiteralMatch[2]) {
     const year = parseInt(monthLiteralMatch[1], 10);
+    if (year < 2010 || year > 2099) {
+      throw new InvalidDateExpression(
+        `Year ${year} is outside supported range (2010-2099).`
+      );
+    }
     const month = parseInt(monthLiteralMatch[2], 10) - 1; // 0-indexed
     const monthStart = new Date(Date.UTC(year, month, 1));
     const monthEnd = lastDayOfMonthUTC(year, month);

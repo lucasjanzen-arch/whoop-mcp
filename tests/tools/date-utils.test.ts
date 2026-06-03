@@ -454,6 +454,31 @@ describe("resolveDateExpression", () => {
     expect(() => resolveDateExpression("2026-00")).toThrow(InvalidDateExpression);
   });
 
+  it('rejects 4-digit year typo "0226-05"', () => {
+    expect(() => resolveDateExpression("0226-05")).toThrow(InvalidDateExpression);
+    expect(() => resolveDateExpression("0226-05")).toThrow(/2010-2099/);
+  });
+
+  it('rejects "2009-12" (below supported range)', () => {
+    expect(() => resolveDateExpression("2009-12")).toThrow(InvalidDateExpression);
+  });
+
+  it('rejects "2100-01" (above supported range)', () => {
+    expect(() => resolveDateExpression("2100-01")).toThrow(InvalidDateExpression);
+  });
+
+  it('accepts "2010-01" (lower bound)', () => {
+    const result = resolveDateExpression("2010-01");
+    expect(result.start).toBe("2010-01-01T00:00:00.000Z");
+    expect(result.end).toBe("2010-01-31T23:59:59.999Z");
+  });
+
+  it('accepts "2099-12" (upper bound)', () => {
+    const result = resolveDateExpression("2099-12");
+    expect(result.start).toBe("2099-12-01T00:00:00.000Z");
+    expect(result.end).toBe("2099-12-31T23:59:59.999Z");
+  });
+
   // -------------------------------------------------------------------------
   // Error cases
   // -------------------------------------------------------------------------
