@@ -457,6 +457,7 @@ describe("toOAuthTokens", () => {
 
 vi.mock("node:child_process", () => ({
   spawn: vi.fn(() => ({
+    on: vi.fn(),
     unref: vi.fn(),
   })),
 }));
@@ -468,7 +469,7 @@ describe("openBrowser", () => {
     const cp = await import("node:child_process");
     mockSpawn = cp.spawn as unknown as ReturnType<typeof vi.fn>;
     mockSpawn.mockReset();
-    mockSpawn.mockReturnValue({ unref: vi.fn() });
+    mockSpawn.mockReturnValue({ on: vi.fn(), unref: vi.fn() });
   });
 
   afterEach(() => {
@@ -540,6 +541,33 @@ describe("openBrowser", () => {
     // URL is passed as a separate argument, not interpolated into a shell string
     const args = mockSpawn.mock.calls[0] as unknown[];
     expect(args[1]).toContain(maliciousUrl);
+  });
+
+  it("attaches an error listener so async ENOENT does not crash the process", () => {
+    // Regression: in a headless container (no xdg-open), spawn() emits an
+    // 'error' event asynchronously. Without a listener, Node treats it as
+    // unhandled and exits the process. The fix attaches a no-op-style handler
+    // that prints the URL for manual copy/paste.
+    const onListener = vi.fn();
+    mockSpawn.mockReturnValue({ on: onListener, unref: vi.fn() });
+
+    openBrowser("https://example.com/auth");
+
+    expect(onListener).toHaveBeenCalled();
+    const [event, handler] = onListener.mock.calls[0] as [
+      string,
+      (err: Error) => void,
+    ];
+    expect(event).toBe("error");
+    expect(typeof handler).toBe("function");
+
+    // Invoking the registered handler must not throw — it should only log
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    expect(() => handler(new Error("spawn xdg-open ENOENT"))).not.toThrow();
+    expect(errSpy).toHaveBeenCalledWith(
+      expect.stringContaining("Could not open browser automatically")
+    );
+    errSpy.mockRestore();
   });
 });
 

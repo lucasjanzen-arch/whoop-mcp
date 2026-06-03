@@ -203,7 +203,16 @@ export function openBrowser(url: string): void {
     };
 
     const [cmd, args] = commands[process.platform] ?? ["xdg-open", [url]];
-    spawn(cmd, args, { detached: true, stdio: "ignore" }).unref();
+    const child = spawn(cmd, args, { detached: true, stdio: "ignore" });
+    // spawn emits 'error' asynchronously when the command can't be found
+    // (e.g. running in a headless container with no xdg-open). Without a
+    // handler, Node treats this as an unhandled error and crashes the process.
+    child.on("error", () => {
+      console.error(
+        `\nCould not open browser automatically. Please open this URL manually:\n${url}\n`
+      );
+    });
+    child.unref();
   } catch {
     // Best-effort — log the URL for manual copy/paste
     console.error(

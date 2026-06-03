@@ -420,3 +420,212 @@ describe("runSetup — non-interactive", () => {
     ).rejects.toThrow(/WHOOP_CLIENT_ID is required/);
   });
 });
+
+// ---------------------------------------------------------------------------
+// runSetup — interactive prompts (fake PassThrough stdin / capture stdout)
+// ---------------------------------------------------------------------------
+
+describe("runSetup — interactive prompts", () => {
+  it("prompts for client id, secret, and target when no flags are passed", async () => {
+    const { PassThrough } = await import("node:stream");
+    const input = new PassThrough();
+    let captured = "";
+    const output: NodeJS.WritableStream = {
+      write: (chunk: string | Uint8Array): boolean => {
+        const text =
+          typeof chunk === "string" ? chunk : Buffer.from(chunk).toString("utf8");
+        captured += text;
+        // Feed the next answer as each prompt appears in output. This avoids
+        // a race where readline may not pick up data buffered before it
+        // attached its 'data' listener.
+        if (text.includes("WHOOP Client ID")) input.write("my-id\n");
+        else if (text.includes("WHOOP Client Secret")) input.write("my-secret\n");
+        else if (text.includes("Target client")) input.write("claude-code\n");
+        return true;
+      },
+    } as unknown as NodeJS.WritableStream;
+
+    const fake = makeFakeFs();
+    await runSetup({}, { io: { input, output }, fs: fake.fs });
+
+    expect(captured).toContain("WHOOP Client ID");
+    expect(captured).toContain("WHOOP Client Secret");
+    expect(captured).toContain("Target client");
+    expect(captured).toContain("claude mcp add whoop");
+    expect(captured).toContain("WHOOP_CLIENT_ID='my-id'");
+    expect(captured).toContain("WHOOP_CLIENT_SECRET='my-secret'");
+  });
+
+  it("defaults to claude-desktop when the user accepts the empty target prompt", async () => {
+    const { PassThrough } = await import("node:stream");
+    const input = new PassThrough();
+    let captured = "";
+    const output: NodeJS.WritableStream = {
+      write: (chunk: string | Uint8Array): boolean => {
+        const text =
+          typeof chunk === "string" ? chunk : Buffer.from(chunk).toString("utf8");
+        captured += text;
+        if (text.includes("Target client")) input.write("\n");
+        return true;
+      },
+    } as unknown as NodeJS.WritableStream;
+    const fake = makeFakeFs();
+
+    await runSetup(
+      {
+        clientId: "id",
+        clientSecret: "s",
+        configPath: "/fake/config.json",
+      },
+      { io: { input, output }, fs: fake.fs }
+    );
+
+    expect(fake.files.get("/fake/config.json")).toBeDefined();
+    expect(captured).toContain("Claude Desktop config written");
+  });
+
+  it("rejects an unknown target value typed at the prompt", async () => {
+    const { PassThrough } = await import("node:stream");
+    const input = new PassThrough();
+    const output: NodeJS.WritableStream = {
+      write: (chunk: string | Uint8Array): boolean => {
+        const text =
+          typeof chunk === "string" ? chunk : Buffer.from(chunk).toString("utf8");
+        if (text.includes("Target client")) input.write("bogus\n");
+        return true;
+      },
+    } as unknown as NodeJS.WritableStream;
+    const fake = makeFakeFs();
+
+    await expect(
+      runSetup(
+        { clientId: "id", clientSecret: "s" },
+        { io: { input, output }, fs: fake.fs }
+      )
+    ).rejects.toThrow(/Invalid client target/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// runSetup — masked-secret raw-mode path
+// ---------------------------------------------------------------------------
+
+describe("runSetup — masked-secret prompt", () => {
+  /**
+   * Build a fake TTY stdin that supports setRawMode + emits chunks of typed
+   * keystrokes via the EventEmitter 'data' event. Mirrors the surface
+   * `promptSecret` actually consumes.
+   */
+  function makeFakeTtyStdin(chunks: readonly string[]): {
+    input: NodeJS.ReadableStream;
+    rawModeCalls: boolean[];
+  } {
+    const listeners: Array<(chunk: string) => void> = [];
+    const rawModeCalls: boolean[] = [];
+    const stdin = {
+      isTTY: true,
+      setRawMode(value: boolean): void {
+        rawModeCalls.push(value);
+      },
+      resume(): void {
+        // Emit all chunks asynchronously after consumer is ready.
+        setImmediate(() => {
+          for (const chunk of chunks) {
+            for (const fn of listeners) fn(chunk);
+          }
+        });
+      },
+      pause(): void {
+        // no-op
+      },
+      setEncoding(): void {
+        // no-op
+      },
+      on(event: string, fn: (chunk: string) => void): unknown {
+        if (event === "data") listeners.push(fn);
+        return stdin;
+      },
+      removeListener(event: string, fn: (chunk: string) => void): unknown {
+        if (event === "data") {
+          const idx = listeners.indexOf(fn);
+          if (idx !== -1) listeners.splice(idx, 1);
+        }
+        return stdin;
+      },
+    };
+    return { input: stdin as unknown as NodeJS.ReadableStream, rawModeCalls };
+  }
+
+  it("masks input characters as asterisks and returns the typed secret", async () => {
+    const { PassThrough } = await import("node:stream");
+
+    let captured = "";
+    const output: NodeJS.WritableStream = {
+      write: (chunk: string | Uint8Array): boolean => {
+        captured +=
+          typeof chunk === "string" ? chunk : Buffer.from(chunk).toString("utf8");
+        return true;
+      },
+    } as unknown as NodeJS.WritableStream;
+
+    // Sequence: type "abXc", press backspace once (deleting "c"), type "9", Enter
+    const { input: secretInput, rawModeCalls } = makeFakeTtyStdin([
+      "ab",
+      "X",
+      "c",
+      "\x7f", // DEL / backspace
+      "9",
+      "\n",
+    ]);
+
+    // We need a *separate* readable for the non-secret prompts (Target client),
+    // because the wizard creates a readline on the same input. Simplest: pass
+    // clientId via flag so only the secret + target prompts run, and wire the
+    // target via output side-effect on a PassThrough.
+    const targetInput = new PassThrough();
+    const fake = makeFakeFs();
+
+    // Compose: chain the secret raw-mode stdin through, then switch to the
+    // target PassThrough by re-wrapping. Simpler: use the same fake-TTY for
+    // promptSecret and a *different* underlying readable for the target
+    // prompt by routing through a duplex. But the wizard passes one input
+    // per runSetup invocation. So instead, drive both via the fake-TTY:
+    // the target prompt uses `createInterface` which reads via 'data'/'line'
+    // events. Since our fake stdin's `on('data')` accepts listeners and we
+    // can emit on demand, we'll feed "claude-code\n" after the secret resolves.
+    const baseEmit = (secretInput as unknown as { _emit?: () => void });
+    void baseEmit; // unused — see below
+
+    // We schedule the target answer by writing to output and detecting it.
+    let targetSent = false;
+    const composedOutput: NodeJS.WritableStream = {
+      write: (chunk: string | Uint8Array): boolean => {
+        const text =
+          typeof chunk === "string" ? chunk : Buffer.from(chunk).toString("utf8");
+        captured += text;
+        if (!targetSent && text.includes("Target client")) {
+          targetSent = true;
+          targetInput.write("claude-code\n");
+        }
+        return true;
+      },
+    } as unknown as NodeJS.WritableStream;
+    void composedOutput; // unused — kept for clarity
+
+    // Since composing two inputs is awkward, take the simpler path: pass
+    // `client: "claude-code"` so only the secret prompt runs interactively.
+    await runSetup(
+      { clientId: "id", client: "claude-code" },
+      { io: { input: secretInput, output }, fs: fake.fs }
+    );
+
+    // Raw mode toggled on then off
+    expect(rawModeCalls).toEqual([true, false]);
+    // 4 typed chars + 1 deleted = "ab", "X", "9" (the "c" got backspaced).
+    // Output should contain 4 asterisks (a/b/X/c), then a backspace-erase
+    // sequence (\x08 \x08), then 1 more asterisk for "9".
+    expect(captured).toMatch(/\*\*\*\*\x08 \x08\*/);
+    // Final command should embed the resolved secret "abX9"
+    expect(captured).toContain("WHOOP_CLIENT_SECRET='abX9'");
+  });
+});
