@@ -206,6 +206,21 @@ Flags:
 - `--client-id` / `--client-secret` skip the interactive prompts (useful for
   scripts; secrets entered interactively are masked).
 
+Example session:
+
+```text
+shashankmishra@Shashanks-MacBook-Pro ~ % npx whoop-ai-mcp setup --client=claude-desktop
+WHOOP MCP — Setup Wizard
+------------------------
+
+WHOOP Client ID (from https://developer.whoop.com): xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+WHOOP Client Secret (input hidden): ****************************************************************
+
+Claude Desktop config written: /Users/shashankmishra/Library/Application Support/Claude/claude_desktop_config.json
+Previous config backed up to: /Users/shashankmishra/Library/Application Support/Claude/claude_desktop_config.json.bak
+Restart Claude Desktop to load the new server.
+```
+
 ## Configuration
 
 ### Environment Variables
