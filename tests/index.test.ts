@@ -51,6 +51,13 @@ vi.mock("@modelcontextprotocol/sdk/server/stdio.js", () => ({
   StdioServerTransport: MockStdioServerTransport,
 }));
 
+const mockCreateHttpServer = vi.fn();
+const mockHttpClose = vi.fn(() => Promise.resolve());
+
+vi.mock("../src/transport/http.js", () => ({
+  createHttpServer: (...args: unknown[]) => mockCreateHttpServer(...args),
+}));
+
 // ---------------------------------------------------------------------------
 // Import the module under test — must be after mocks
 // ---------------------------------------------------------------------------
@@ -93,6 +100,15 @@ describe("main() entry point", () => {
     // Set required env vars by default
     process.env.WHOOP_CLIENT_ID = "test-client-id";
     process.env.WHOOP_CLIENT_SECRET = "test-client-secret";
+    // Silence logger output during tests (existing tests still validate console.error)
+    process.env.LOG_LEVEL = "error";
+    // Reset transport-related env vars so tests start from a clean slate
+    delete process.env.MCP_TRANSPORT;
+    delete process.env.MCP_PORT;
+    delete process.env.MCP_AUTH_TOKEN;
+    delete process.env.MCP_HOST;
+    delete process.env.MCP_ALLOWED_ORIGINS;
+    delete process.env.LOG_FORMAT;
   });
 
   afterEach(() => {
@@ -369,6 +385,193 @@ describe("main() entry point", () => {
       // At least one call to console.error with startup info
       const allMessages = consoleErrorSpy.mock.calls.map((c) => String(c[0])).join(" ");
       expect(allMessages).toMatch(/whoop.*mcp.*start/i);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Transport selection (MCP_TRANSPORT)
+  // -------------------------------------------------------------------------
+
+  describe("transport selection", () => {
+    function setupHttpHappyPath(): void {
+      const mockTransport = { _http: true };
+      mockCreateHttpServer.mockResolvedValue({
+        server: {},
+        transport: mockTransport,
+        close: mockHttpClose,
+      });
+    }
+
+    it("defaults to stdio transport when MCP_TRANSPORT is unset", async () => {
+      setupHappyPath();
+      const { main } = await importMain();
+      await main();
+
+      expect(MockStdioServerTransport).toHaveBeenCalledOnce();
+      expect(mockCreateHttpServer).not.toHaveBeenCalled();
+    });
+
+    it("explicit MCP_TRANSPORT=stdio behaves identically to default", async () => {
+      process.env.MCP_TRANSPORT = "stdio";
+      setupHappyPath();
+      const { main } = await importMain();
+      await main();
+
+      expect(MockStdioServerTransport).toHaveBeenCalledOnce();
+      expect(mockCreateHttpServer).not.toHaveBeenCalled();
+    });
+
+    it("MCP_TRANSPORT=http starts only the HTTP server (no stdio)", async () => {
+      process.env.MCP_TRANSPORT = "http";
+      process.env.MCP_AUTH_TOKEN = "test-bearer-token-32chars-aaaa";
+      process.env.MCP_PORT = "4001";
+      setupHappyPath();
+      setupHttpHappyPath();
+
+      const { main } = await importMain();
+      await main();
+
+      expect(MockStdioServerTransport).not.toHaveBeenCalled();
+      expect(mockCreateHttpServer).toHaveBeenCalledOnce();
+      expect(mockCreateHttpServer).toHaveBeenCalledWith(
+        expect.objectContaining({
+          authToken: "test-bearer-token-32chars-aaaa",
+          port: 4001,
+        })
+      );
+      // server.connect was called with the http transport
+      expect(mockConnect).toHaveBeenCalledWith({ _http: true });
+    });
+
+    it("MCP_TRANSPORT=both starts both stdio AND HTTP", async () => {
+      process.env.MCP_TRANSPORT = "both";
+      process.env.MCP_AUTH_TOKEN = "test-bearer-token-32chars-aaaa";
+      setupHappyPath();
+      setupHttpHappyPath();
+
+      const { main } = await importMain();
+      await main();
+
+      expect(MockStdioServerTransport).toHaveBeenCalledOnce();
+      expect(mockCreateHttpServer).toHaveBeenCalledOnce();
+      // server.connect called for both transports
+      expect(mockConnect).toHaveBeenCalledTimes(2);
+    });
+
+    it("uses default port 3000 when MCP_PORT is unset", async () => {
+      process.env.MCP_TRANSPORT = "http";
+      process.env.MCP_AUTH_TOKEN = "tok";
+      setupHappyPath();
+      setupHttpHappyPath();
+
+      const { main } = await importMain();
+      await main();
+
+      expect(mockCreateHttpServer).toHaveBeenCalledWith(
+        expect.objectContaining({ port: 3000 })
+      );
+    });
+
+    it("forwards MCP_HOST and MCP_ALLOWED_ORIGINS to the HTTP server", async () => {
+      process.env.MCP_TRANSPORT = "http";
+      process.env.MCP_AUTH_TOKEN = "tok";
+      process.env.MCP_HOST = "127.0.0.1";
+      process.env.MCP_ALLOWED_ORIGINS = "https://claude.ai, https://app.example.com";
+      setupHappyPath();
+      setupHttpHappyPath();
+
+      const { main } = await importMain();
+      await main();
+
+      expect(mockCreateHttpServer).toHaveBeenCalledWith(
+        expect.objectContaining({
+          host: "127.0.0.1",
+          allowedOrigins: ["https://claude.ai", "https://app.example.com"],
+        })
+      );
+    });
+
+    it("MCP_TRUST_PROXY=1 enables trustProxy on the HTTP server", async () => {
+      process.env.MCP_TRANSPORT = "http";
+      process.env.MCP_AUTH_TOKEN = "tok";
+      process.env.MCP_TRUST_PROXY = "1";
+      setupHappyPath();
+      setupHttpHappyPath();
+
+      const { main } = await importMain();
+      await main();
+      delete process.env.MCP_TRUST_PROXY;
+
+      expect(mockCreateHttpServer).toHaveBeenCalledWith(
+        expect.objectContaining({ trustProxy: true })
+      );
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Configuration validation errors
+  // -------------------------------------------------------------------------
+
+  describe("configuration validation", () => {
+    it("throws on invalid MCP_TRANSPORT value", async () => {
+      process.env.MCP_TRANSPORT = "websocket";
+      setupHappyPath();
+
+      const { main } = await importMain();
+      await expect(main()).rejects.toThrow(/MCP_TRANSPORT/);
+    });
+
+    it("throws when MCP_TRANSPORT=http but MCP_AUTH_TOKEN is missing", async () => {
+      process.env.MCP_TRANSPORT = "http";
+      delete process.env.MCP_AUTH_TOKEN;
+      setupHappyPath();
+
+      const { main } = await importMain();
+      await expect(main()).rejects.toThrow(/MCP_AUTH_TOKEN/);
+    });
+
+    it("throws on non-numeric MCP_PORT", async () => {
+      process.env.MCP_TRANSPORT = "http";
+      process.env.MCP_AUTH_TOKEN = "tok";
+      process.env.MCP_PORT = "abc";
+      setupHappyPath();
+
+      const { main } = await importMain();
+      await expect(main()).rejects.toThrow(/MCP_PORT/);
+    });
+
+    it("throws on out-of-range MCP_PORT", async () => {
+      process.env.MCP_TRANSPORT = "http";
+      process.env.MCP_AUTH_TOKEN = "tok";
+      process.env.MCP_PORT = "99999";
+      setupHappyPath();
+
+      const { main } = await importMain();
+      await expect(main()).rejects.toThrow(/MCP_PORT/);
+    });
+
+    it("throws on invalid LOG_LEVEL", async () => {
+      process.env.LOG_LEVEL = "verbose";
+      setupHappyPath();
+
+      const { main } = await importMain();
+      await expect(main()).rejects.toThrow(/LOG_LEVEL/);
+    });
+
+    it("throws on invalid LOG_FORMAT", async () => {
+      process.env.LOG_FORMAT = "yaml";
+      setupHappyPath();
+
+      const { main } = await importMain();
+      await expect(main()).rejects.toThrow(/LOG_FORMAT/);
+    });
+
+    it("accepts LOG_LEVEL=debug", async () => {
+      process.env.LOG_LEVEL = "debug";
+      setupHappyPath();
+
+      const { main } = await importMain();
+      await expect(main()).resolves.toBeUndefined();
     });
   });
 });
