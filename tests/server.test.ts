@@ -335,6 +335,66 @@ describe("createWhoopServer", () => {
   }
 
   // -------------------------------------------------------------------------
+  // Input schema — compare_periods (ISO 8601 regex validation)
+  // -------------------------------------------------------------------------
+
+  describe("compare_periods schema", () => {
+    const validInput = {
+      period_a_start: "2026-05-01T00:00:00.000Z",
+      period_a_end: "2026-05-07T23:59:59.999Z",
+      period_b_start: "2026-05-08T00:00:00.000Z",
+      period_b_end: "2026-05-14T23:59:59.999Z",
+    };
+
+    it("accepts valid YYYY-MM-DD compare_periods inputs", async () => {
+      const result = await client.callTool({
+        name: "compare_periods",
+        arguments: {
+          period_a_start: "2026-05-01",
+          period_a_end: "2026-05-07",
+          period_b_start: "2026-05-08",
+          period_b_end: "2026-05-14",
+        },
+      });
+      // Schema accepts; handler may still error on data but not with a schema-validation message
+      const content = result.content as Array<{ type: string; text: string }>;
+      expect(content[0].text).not.toMatch(/Expected ISO 8601/);
+    });
+
+    it("accepts valid full ISO 8601 datetime compare_periods inputs", async () => {
+      const result = await client.callTool({
+        name: "compare_periods",
+        arguments: validInput,
+      });
+      const content = result.content as Array<{ type: string; text: string }>;
+      expect(content[0].text).not.toMatch(/Expected ISO 8601/);
+    });
+
+    it("rejects malformed compare_periods date input at schema level", async () => {
+      const result = await client.callTool({
+        name: "compare_periods",
+        arguments: { ...validInput, period_a_start: "not-a-date" },
+      });
+      expect(result.isError).toBe(true);
+      const content = result.content as Array<{ type: string; text: string }>;
+      expect(content[0].text).toMatch(/Expected ISO 8601/);
+      expect(content[0].text).toMatch(/period_a_start/);
+    });
+
+    it("rejects relative date expressions at schema level (compare_periods requires explicit ISO)", async () => {
+      const result = await client.callTool({
+        name: "compare_periods",
+        arguments: { ...validInput, period_b_end: "last 7 days" },
+      });
+      expect(result.isError).toBe(true);
+      const content = result.content as Array<{ type: string; text: string }>;
+      expect(content[0].text).toMatch(/Expected ISO 8601/);
+      expect(content[0].text).toMatch(/period_b_end/);
+    });
+  });
+
+
+  // -------------------------------------------------------------------------
   // Tool handler behavior (real implementations)
   // -------------------------------------------------------------------------
 

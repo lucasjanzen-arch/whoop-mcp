@@ -39,7 +39,8 @@ export interface DateRange {
 const MAX_LAST_N_DAYS = 365;
 
 /** Regex for ISO 8601 date or date-time strings */
-const ISO_8601_REGEX = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}(\.\d{1,3})?(Z|[+-]\d{2}:\d{2})?)?$/;
+export const ISO_8601_REGEX =
+  /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}(\.\d{1,3})?(Z|[+-]\d{2}:\d{2})?)?$/;
 
 /** Regex for "last N days" expressions */
 const LAST_N_DAYS_REGEX = /^last\s+(\d+)\s+days?$/i;

@@ -25,6 +25,7 @@ import { getToday } from "./tools/get-today.js";
 import { getCalendar } from "./tools/get-calendar.js";
 import { registerResources, type ResourceCache } from "./resources/index.js";
 import { registerPrompts } from "./prompts/index.js";
+import { ISO_8601_REGEX } from "./tools/date-utils.js";
 import { readFileSync } from "node:fs";
 
 // ---------------------------------------------------------------------------
@@ -62,6 +63,11 @@ const stringIdSchema = z.object({
 const numericIdSchema = z.object({
   id: z.number().int().positive().describe("The record ID to look up."),
 });
+
+/** Reusable ISO 8601 date/datetime string with schema-level validation */
+const isoDateString = z
+  .string()
+  .regex(ISO_8601_REGEX, "Expected ISO 8601 date in YYYY-MM-DD or full datetime format.");
 
 /** Input schema shared by all collection endpoints (recovery, sleep, workout, cycle) */
 const collectionInputSchema = z.object({
@@ -331,10 +337,10 @@ export function createWhoopServer(client: WhoopClient, options?: CreateServerOpt
       description:
         "Compare health metrics between two time periods — shows improvement or regression in recovery, sleep, and strain.",
       inputSchema: z.object({
-        period_a_start: z.string().describe("ISO 8601 start of the first period."),
-        period_a_end: z.string().describe("ISO 8601 end of the first period."),
-        period_b_start: z.string().describe("ISO 8601 start of the second period."),
-        period_b_end: z.string().describe("ISO 8601 end of the second period."),
+        period_a_start: isoDateString.describe("ISO 8601 start of the first period."),
+        period_a_end: isoDateString.describe("ISO 8601 end of the first period."),
+        period_b_start: isoDateString.describe("ISO 8601 start of the second period."),
+        period_b_end: isoDateString.describe("ISO 8601 end of the second period."),
       }),
       annotations: { readOnlyHint: true },
     },
