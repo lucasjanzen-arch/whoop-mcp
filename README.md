@@ -810,6 +810,24 @@ npx whoop-ai-mcp
 
 See [CHANGELOG.md](CHANGELOG.md) for a full list of changes in each release.
 
+## Privacy notes for analytical tools
+
+The analytical tools — `get_weekly_summary`, `get_trend`, and
+`compare_periods` — return pre-computed statistical summaries derived from
+your underlying recovery / sleep / cycle / workout records. No new health
+data is exposed beyond what the per-record collection tools already return
+(`get_recovery_collection`, `get_sleep_collection`, etc.), but the
+aggregated form is more concentrated and easier to scan over time. In
+particular, the `anomalies` array returned by `get_trend` flags days that
+deviate from your personal baseline — such days may correlate with
+illness, injury, travel, or lifestyle changes.
+
+If you connect this MCP server to a remote AI assistant (rather than a
+local one), be aware that those summaries will be sent to that assistant
+in the same way any other tool result is. All data continues to flow only
+between the WHOOP API, this MCP server running on your machine, and the
+assistant you explicitly invoke — there is no third-party telemetry.
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development workflow, coding conventions, and the project's Copilot agent/skill configuration.
