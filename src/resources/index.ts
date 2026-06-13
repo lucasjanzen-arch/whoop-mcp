@@ -1,5 +1,5 @@
 /**
- * MCP Resources — in-memory cache with TTL and in-flight deduplication.
+ * MCP Resources — ambient health context backed by the shared API client cache.
  *
  * Exposes 4 resources:
  * - whoop://v2/user/recovery/latest — most recent recovery score
@@ -7,9 +7,10 @@
  * - whoop://v2/user/cycle/latest — most recent cycle
  * - whoop://v2/user/profile — user profile (cached 1hr)
  *
- * Cache is scoped to the ResourceCache instance (not global).
- * In-flight deduplication shares a single Promise for concurrent reads.
- * Token refresh invalidates all cached entries.
+ * Caching, in-flight deduplication, and invalidation are handled by the
+ * `MemoryCache` injected into the WHOOP client (opt-in per request via the
+ * `cache` option). Because resources and tools share that one cache keyed by
+ * request path, a warm `get_today` can be served entirely from cache.
  */
 
 import type { WhoopClient } from "../api/client.js";
@@ -19,80 +20,14 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 // Constants
 // ---------------------------------------------------------------------------
 
-/** Default TTL for dynamic resources (recovery, sleep, cycle) — 5 minutes */
+/** TTL for recovery and sleep resources — 5 minutes */
 export const DYNAMIC_TTL_MS = 5 * 60 * 1000;
+
+/** TTL for the cycle resource — 2 minutes (strain updates more frequently) */
+export const CYCLE_TTL_MS = 2 * 60 * 1000;
 
 /** TTL for the profile resource — 1 hour */
 export const PROFILE_TTL_MS = 60 * 60 * 1000;
-
-// ---------------------------------------------------------------------------
-// Cache types
-// ---------------------------------------------------------------------------
-
-interface CacheEntry<T> {
-  data: T;
-  expiry: number;
-}
-
-// ---------------------------------------------------------------------------
-// ResourceCache class
-// ---------------------------------------------------------------------------
-
-/**
- * In-memory cache with TTL and in-flight request deduplication.
- * Scoped to a single instance — not global.
- */
-export class ResourceCache {
-  private cache = new Map<string, CacheEntry<unknown>>();
-  private inflight = new Map<string, Promise<unknown>>();
-  private generation = 0;
-
-  /**
-   * Get a value from cache or fetch it.
-   * Concurrent calls for the same key share a single in-flight request.
-   * Uses a generation counter to prevent stale fetches from repopulating
-   * a cache that was invalidated mid-flight.
-   */
-  async getOrFetch<T>(key: string, ttlMs: number, fetcher: () => Promise<T>): Promise<T> {
-    // Check cache
-    const entry = this.cache.get(key);
-    if (entry && Date.now() < entry.expiry) {
-      return entry.data as T;
-    }
-
-    // Deduplicate in-flight requests
-    const existing = this.inflight.get(key);
-    if (existing) {
-      return existing as Promise<T>;
-    }
-
-    // Capture generation before fetch — if invalidated mid-flight, don't cache
-    const gen = this.generation;
-
-    // Fetch and cache
-    const promise = fetcher()
-      .then((data) => {
-        if (this.generation === gen) {
-          this.cache.set(key, { data, expiry: Date.now() + ttlMs });
-        }
-        this.inflight.delete(key);
-        return data;
-      })
-      .catch((error: unknown) => {
-        this.inflight.delete(key);
-        throw error;
-      });
-
-    this.inflight.set(key, promise);
-    return promise;
-  }
-
-  /** Invalidate all cached entries (e.g., on token refresh). */
-  invalidateAll(): void {
-    this.cache.clear();
-    this.generation++;
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Resource definitions
@@ -115,7 +50,10 @@ export const RESOURCE_DEFINITIONS: ResourceDefinition[] = [
     mimeType: "application/json",
     ttlMs: DYNAMIC_TTL_MS,
     fetch: async (client) => {
-      const result = await client.get<{ records: unknown[] }>("/v2/recovery?limit=1");
+      const result = await client.get<{ records: unknown[] }>("/v2/recovery?limit=1", {
+        cache: true,
+        ttlMs: DYNAMIC_TTL_MS,
+      });
       if (result.records.length === 0) {
         return { message: "No recovery data available." };
       }
@@ -129,7 +67,10 @@ export const RESOURCE_DEFINITIONS: ResourceDefinition[] = [
     mimeType: "application/json",
     ttlMs: DYNAMIC_TTL_MS,
     fetch: async (client) => {
-      const result = await client.get<{ records: unknown[] }>("/v2/activity/sleep?limit=1");
+      const result = await client.get<{ records: unknown[] }>("/v2/activity/sleep?limit=1", {
+        cache: true,
+        ttlMs: DYNAMIC_TTL_MS,
+      });
       if (result.records.length === 0) {
         return { message: "No sleep data available." };
       }
@@ -141,9 +82,12 @@ export const RESOURCE_DEFINITIONS: ResourceDefinition[] = [
     name: "Latest Cycle",
     description: "Most recent physiological cycle including strain and calorie data.",
     mimeType: "application/json",
-    ttlMs: DYNAMIC_TTL_MS,
+    ttlMs: CYCLE_TTL_MS,
     fetch: async (client) => {
-      const result = await client.get<{ records: unknown[] }>("/v2/cycle?limit=1");
+      const result = await client.get<{ records: unknown[] }>("/v2/cycle?limit=1", {
+        cache: true,
+        ttlMs: CYCLE_TTL_MS,
+      });
       if (result.records.length === 0) {
         return { message: "No cycle data available." };
       }
@@ -157,7 +101,7 @@ export const RESOURCE_DEFINITIONS: ResourceDefinition[] = [
     mimeType: "application/json",
     ttlMs: PROFILE_TTL_MS,
     fetch: async (client) => {
-      return client.get("/v2/user/profile/basic");
+      return client.get("/v2/user/profile/basic", { cache: true, ttlMs: PROFILE_TTL_MS });
     },
   },
 ];
@@ -168,11 +112,11 @@ export const RESOURCE_DEFINITIONS: ResourceDefinition[] = [
 
 /**
  * Register all WHOOP resources on the given MCP server.
- * Returns the ResourceCache instance for cache invalidation on token refresh.
+ *
+ * Caching is delegated to the client's shared `MemoryCache`; this function is
+ * stateless and registers read handlers only.
  */
-export function registerResources(server: McpServer, client: WhoopClient): ResourceCache {
-  const cache = new ResourceCache();
-
+export function registerResources(server: McpServer, client: WhoopClient): void {
   for (const def of RESOURCE_DEFINITIONS) {
     server.registerResource(
       def.name,
@@ -180,7 +124,7 @@ export function registerResources(server: McpServer, client: WhoopClient): Resou
       { description: def.description, mimeType: def.mimeType },
       async (uri: URL) => {
         try {
-          const data = await cache.getOrFetch(def.uri, def.ttlMs, () => def.fetch(client));
+          const data = await def.fetch(client);
           return {
             contents: [
               {
@@ -206,6 +150,4 @@ export function registerResources(server: McpServer, client: WhoopClient): Resou
       }
     );
   }
-
-  return cache;
 }

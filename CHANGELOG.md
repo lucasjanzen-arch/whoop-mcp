@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Shared in-memory cache (`MemoryCache`)** — generic LRU + TTL cache (`src/cache/memory-cache.ts`) backing both MCP resources and read tools. Opt-in per request via `client.get(path, { cache: true, ttlMs })`. TTLs: profile 1 hr, recovery/sleep 5 min, cycle 2 min; date-range collections stay uncached. Cache keys are normalized by path with alphabetically-sorted query params (no tokens in keys), concurrent identical requests are de-duplicated (stampede prevention), and the whole cache is cleared on token refresh. `get_today` now serves from the same cache, so a warm cache makes zero API calls.
+- **Write-safety preview pattern (`withPreview`)** — future-ready two-phase preview/confirm utility (`src/tools/write-safety.ts`) with `WritePreview<P>`, `WriteReceipt<R>`, and `WriteResult<P, R>` types. `confirm: false` returns a preview with a generated UUID v4 `idempotency_key`; `confirm: true` executes the write and echoes the same key for safe retries. No write tools are registered (WHOOP exposes no public write endpoints yet).
+
+### Changed
+- **Removed legacy `ResourceCache`** — resources now delegate caching to the shared `MemoryCache` via the API client. `registerResources` and `createWhoopServer` no longer return a cache handle.
+
+### Test count
+- 716 → **741** (+25). MemoryCache 97.75% / write-safety 100% line coverage. Lint, typecheck, build clean.
+
 ## [0.5.2] - 2026-06-03
 
 ### Security

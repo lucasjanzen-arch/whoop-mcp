@@ -1,155 +1,12 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
-  ResourceCache,
   RESOURCE_DEFINITIONS,
   registerResources,
   DYNAMIC_TTL_MS,
+  CYCLE_TTL_MS,
   PROFILE_TTL_MS,
 } from "../../src/resources/index.js";
 import type { WhoopClient } from "../../src/api/client.js";
-
-// ---------------------------------------------------------------------------
-// ResourceCache unit tests
-// ---------------------------------------------------------------------------
-
-describe("ResourceCache", () => {
-  beforeEach(() => {
-    vi.useFakeTimers();
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
-  it("returns fetched data on cache miss", async () => {
-    const cache = new ResourceCache();
-    const fetcher = vi.fn().mockResolvedValue({ score: 85 });
-
-    const result = await cache.getOrFetch("key1", 5000, fetcher);
-
-    expect(result).toEqual({ score: 85 });
-    expect(fetcher).toHaveBeenCalledTimes(1);
-  });
-
-  it("returns cached data within TTL without calling fetcher", async () => {
-    const cache = new ResourceCache();
-    const fetcher = vi.fn().mockResolvedValue({ score: 85 });
-
-    await cache.getOrFetch("key1", 5000, fetcher);
-    const result = await cache.getOrFetch("key1", 5000, fetcher);
-
-    expect(result).toEqual({ score: 85 });
-    expect(fetcher).toHaveBeenCalledTimes(1);
-  });
-
-  it("re-fetches after TTL expires", async () => {
-    const cache = new ResourceCache();
-    const fetcher = vi
-      .fn()
-      .mockResolvedValueOnce({ score: 85 })
-      .mockResolvedValueOnce({ score: 90 });
-
-    await cache.getOrFetch("key1", 5000, fetcher);
-    vi.advanceTimersByTime(5001);
-    const result = await cache.getOrFetch("key1", 5000, fetcher);
-
-    expect(result).toEqual({ score: 90 });
-    expect(fetcher).toHaveBeenCalledTimes(2);
-  });
-
-  it("deduplicates concurrent in-flight requests", async () => {
-    const cache = new ResourceCache();
-    let resolvePromise: (val: unknown) => void;
-    const fetcher = vi.fn().mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          resolvePromise = resolve;
-        })
-    );
-
-    const p1 = cache.getOrFetch("key1", 5000, fetcher);
-    const p2 = cache.getOrFetch("key1", 5000, fetcher);
-
-    // Both should share the same in-flight request
-    expect(fetcher).toHaveBeenCalledTimes(1);
-
-    resolvePromise!({ score: 85 });
-    const [r1, r2] = await Promise.all([p1, p2]);
-
-    expect(r1).toEqual({ score: 85 });
-    expect(r2).toEqual({ score: 85 });
-  });
-
-  it("invalidateAll clears cached data", async () => {
-    const cache = new ResourceCache();
-    const fetcher = vi
-      .fn()
-      .mockResolvedValueOnce({ score: 85 })
-      .mockResolvedValueOnce({ score: 90 });
-
-    await cache.getOrFetch("key1", 5000, fetcher);
-    cache.invalidateAll();
-    const result = await cache.getOrFetch("key1", 5000, fetcher);
-
-    expect(result).toEqual({ score: 90 });
-    expect(fetcher).toHaveBeenCalledTimes(2);
-  });
-
-  it("invalidateAll prevents stale in-flight requests from repopulating cache", async () => {
-    const cache = new ResourceCache();
-    let resolveFirst: (val: unknown) => void;
-    const fetcher = vi
-      .fn()
-      .mockImplementationOnce(
-        () =>
-          new Promise((resolve) => {
-            resolveFirst = resolve;
-          })
-      )
-      .mockResolvedValueOnce({ score: 99 });
-
-    // Start a fetch
-    const p1 = cache.getOrFetch("key1", 5000, fetcher);
-
-    // Invalidate while fetch is in-flight
-    cache.invalidateAll();
-
-    // Resolve the original fetch — it should NOT cache because generation changed
-    resolveFirst!({ score: 85 });
-    await p1;
-
-    // Next fetch should call fetcher again (cache was not repopulated)
-    const result = await cache.getOrFetch("key1", 5000, fetcher);
-    expect(result).toEqual({ score: 99 });
-    expect(fetcher).toHaveBeenCalledTimes(2);
-  });
-
-  it("propagates fetcher errors and cleans up inflight", async () => {
-    const cache = new ResourceCache();
-    const fetcher = vi.fn().mockRejectedValue(new Error("network fail"));
-
-    await expect(cache.getOrFetch("key1", 5000, fetcher)).rejects.toThrow("network fail");
-
-    // After error, inflight should be cleared — next call retries
-    fetcher.mockResolvedValue({ score: 85 });
-    const result = await cache.getOrFetch("key1", 5000, fetcher);
-    expect(result).toEqual({ score: 85 });
-  });
-
-  it("different keys are cached independently", async () => {
-    const cache = new ResourceCache();
-    const fetcher1 = vi.fn().mockResolvedValue("a");
-    const fetcher2 = vi.fn().mockResolvedValue("b");
-
-    const r1 = await cache.getOrFetch("k1", 5000, fetcher1);
-    const r2 = await cache.getOrFetch("k2", 5000, fetcher2);
-
-    expect(r1).toBe("a");
-    expect(r2).toBe("b");
-    expect(fetcher1).toHaveBeenCalledTimes(1);
-    expect(fetcher2).toHaveBeenCalledTimes(1);
-  });
-});
 
 // ---------------------------------------------------------------------------
 // RESOURCE_DEFINITIONS tests
@@ -171,13 +28,21 @@ describe("RESOURCE_DEFINITIONS", () => {
     }
   });
 
-  it("dynamic resources use 5-minute TTL", () => {
-    const dynamicResources = RESOURCE_DEFINITIONS.filter(
-      (d) => d.uri !== "whoop://v2/user/profile"
+  it("recovery and sleep resources use 5-minute TTL", () => {
+    const fiveMinResources = RESOURCE_DEFINITIONS.filter(
+      (d) =>
+        d.uri === "whoop://v2/user/recovery/latest" || d.uri === "whoop://v2/user/sleep/latest"
     );
-    for (const def of dynamicResources) {
+    expect(fiveMinResources).toHaveLength(2);
+    for (const def of fiveMinResources) {
       expect(def.ttlMs).toBe(DYNAMIC_TTL_MS);
     }
+  });
+
+  it("cycle resource uses 2-minute TTL", () => {
+    const cycleDef = RESOURCE_DEFINITIONS.find((d) => d.uri === "whoop://v2/user/cycle/latest");
+    expect(cycleDef).toBeDefined();
+    expect(cycleDef!.ttlMs).toBe(CYCLE_TTL_MS);
   });
 
   it("profile resource uses 1-hour TTL", () => {
@@ -196,7 +61,10 @@ describe("RESOURCE_DEFINITIONS", () => {
 
       const result = await def.fetch(mockClient);
       expect(result).toEqual({ recovery_score: 85 });
-      expect(mockClient.get).toHaveBeenCalledWith("/v2/recovery?limit=1");
+      expect(mockClient.get).toHaveBeenCalledWith("/v2/recovery?limit=1", {
+        cache: true,
+        ttlMs: DYNAMIC_TTL_MS,
+      });
     });
 
     it("returns empty message when no records", async () => {
@@ -219,7 +87,10 @@ describe("RESOURCE_DEFINITIONS", () => {
 
       const result = await def.fetch(mockClient);
       expect(result).toEqual({ id: "sleep-1" });
-      expect(mockClient.get).toHaveBeenCalledWith("/v2/activity/sleep?limit=1");
+      expect(mockClient.get).toHaveBeenCalledWith("/v2/activity/sleep?limit=1", {
+        cache: true,
+        ttlMs: DYNAMIC_TTL_MS,
+      });
     });
 
     it("returns empty message when no records", async () => {
@@ -242,7 +113,10 @@ describe("RESOURCE_DEFINITIONS", () => {
 
       const result = await def.fetch(mockClient);
       expect(result).toEqual({ id: 200 });
-      expect(mockClient.get).toHaveBeenCalledWith("/v2/cycle?limit=1");
+      expect(mockClient.get).toHaveBeenCalledWith("/v2/cycle?limit=1", {
+        cache: true,
+        ttlMs: CYCLE_TTL_MS,
+      });
     });
 
     it("returns empty message when no records", async () => {
@@ -265,7 +139,10 @@ describe("RESOURCE_DEFINITIONS", () => {
 
       const result = await def.fetch(mockClient);
       expect(result).toEqual({ first_name: "Jane" });
-      expect(mockClient.get).toHaveBeenCalledWith("/v2/user/profile/basic");
+      expect(mockClient.get).toHaveBeenCalledWith("/v2/user/profile/basic", {
+        cache: true,
+        ttlMs: PROFILE_TTL_MS,
+      });
     });
   });
 });
@@ -284,17 +161,6 @@ describe("registerResources", () => {
     registerResources(mockServer, mockClient);
 
     expect(mockServer.registerResource).toHaveBeenCalledTimes(4);
-  });
-
-  it("returns a ResourceCache instance", () => {
-    const mockServer = {
-      registerResource: vi.fn(),
-    };
-    const mockClient: WhoopClient = { get: vi.fn().mockResolvedValue({}) };
-
-    const cache = registerResources(mockServer, mockClient);
-
-    expect(cache).toBeInstanceOf(ResourceCache);
   });
 
   it("registers resources with correct URIs and metadata", () => {

@@ -502,12 +502,50 @@ MCP Resources provide ambient health context — AI assistants can read your cur
 |--------------|-------------|-----------|
 | `whoop://v2/user/recovery/latest` | Most recent recovery score, HRV, RHR | 5 min |
 | `whoop://v2/user/sleep/latest` | Most recent sleep record | 5 min |
-| `whoop://v2/user/cycle/latest` | Current physiological cycle (strain) | 5 min |
+| `whoop://v2/user/cycle/latest` | Current physiological cycle (strain) | 2 min |
 | `whoop://v2/user/profile` | User profile (name, email) | 1 hr |
 
 **Privacy:** Resources expose the same data available through tools — they simply make it accessible as ambient context. No additional WHOOP scopes are required. Data is cached in-memory with short TTLs and invalidated on token refresh.
 
 To disable resources: set `WHOOP_MCP_DISABLE_RESOURCES=1`.
+
+---
+
+## Caching
+
+Read requests can be served from a shared in-memory cache (LRU + TTL) to cut
+redundant WHOOP API calls and improve latency. The same cache backs both MCP
+resources and tools such as `get_today`, so a warm cache answers repeat queries
+without hitting the API.
+
+| Data | TTL |
+|------|-----|
+| Profile | 1 hr |
+| Recovery, Sleep | 5 min |
+| Cycle | 2 min |
+| Collections (date-range queries) | Uncached |
+
+- Cache keys are normalized by request path with sorted query params; **no tokens are ever part of a cache key**.
+- Concurrent identical requests are de-duplicated (single in-flight fetch — stampede prevention).
+- The entire cache is cleared on token refresh.
+
+---
+
+## Write Operations
+
+The server is **read-only today** — WHOOP does not currently expose public write
+endpoints, so no write tools are registered. The codebase ships a
+*future-ready* write-safety pattern (`withPreview()`) so that mutations, if WHOOP
+adds them, follow a safe two-phase flow:
+
+1. **Preview** (`confirm: false`) — returns a `WritePreview` describing exactly
+   what would change, plus a generated `idempotency_key`. Nothing is written.
+2. **Confirm** (`confirm: true`) — executes the write and returns a
+   `WriteReceipt` carrying the same `idempotency_key`, so retried confirms never
+   create duplicate records.
+
+This gives an AI assistant a built-in "show me before you do it" checkpoint and
+makes retries safe by construction. See [src/tools/write-safety.ts](src/tools/write-safety.ts).
 
 ---
 

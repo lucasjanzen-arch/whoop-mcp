@@ -20,6 +20,7 @@ import { authenticate, refreshAccessToken, toOAuthTokens } from "./auth/oauth.js
 import type { OAuthConfig } from "./auth/oauth.js";
 import { loadTokens, saveTokens } from "./auth/token-store.js";
 import { createWhoopClient } from "./api/client.js";
+import { MemoryCache } from "./cache/memory-cache.js";
 import { createWhoopServer } from "./server.js";
 import { connectStdioTransport } from "./transport/stdio.js";
 import { createHttpServer, type HttpServerResult } from "./transport/http.js";
@@ -118,7 +119,9 @@ export async function main(): Promise<void> {
   logger.info("whoop authentication complete");
 
   // 4. Create the WHOOP API client with automatic token refresh.
-  let resourceCacheRef: { invalidateAll(): void } | null = null;
+  // A single process-wide cache is shared by the client (opt-in per request)
+  // and the MCP resources; it is cleared whenever tokens are refreshed.
+  const cache = new MemoryCache();
 
   const onTokenRefresh = async (): Promise<string> => {
     const tokens = await loadTokens();
@@ -132,18 +135,17 @@ export async function main(): Promise<void> {
     const newTokens = toOAuthTokens(refreshed, tokens.refresh_token);
     await saveTokens(newTokens);
 
-    resourceCacheRef?.invalidateAll();
+    cache.clear();
     logger.info("whoop token refreshed");
 
     return newTokens.access_token;
   };
 
-  const client = createWhoopClient({ accessToken, onTokenRefresh, logger });
+  const client = createWhoopClient({ accessToken, onTokenRefresh, logger, cache });
 
   // 5. Create the MCP server with all WHOOP tools and resources
   const disableResources = process.env.WHOOP_MCP_DISABLE_RESOURCES === "1";
-  const { server, resourceCache } = createWhoopServer(client, { disableResources });
-  resourceCacheRef = resourceCache;
+  const { server } = createWhoopServer(client, { disableResources });
 
   // 6. Connect transports based on MCP_TRANSPORT mode
   const httpResults: HttpServerResult[] = [];

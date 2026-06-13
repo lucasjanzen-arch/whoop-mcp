@@ -23,7 +23,7 @@ import { comparePeriods } from "./tools/compare-periods.js";
 import { getTrend } from "./tools/get-trend.js";
 import { getToday } from "./tools/get-today.js";
 import { getCalendar } from "./tools/get-calendar.js";
-import { registerResources, type ResourceCache } from "./resources/index.js";
+import { registerResources } from "./resources/index.js";
 import { registerPrompts } from "./prompts/index.js";
 import { ISO_8601_REGEX } from "./tools/date-utils.js";
 import { readFileSync } from "node:fs";
@@ -159,10 +159,9 @@ export interface CreateServerOptions {
   disableResources?: boolean;
 }
 
-/** Return type includes the cache for token-refresh invalidation */
+/** Return type for the configured MCP server. */
 export interface WhoopServer {
   server: McpServer;
-  resourceCache: ResourceCache | null;
 }
 
 /**
@@ -424,9 +423,8 @@ export function createWhoopServer(client: WhoopClient, options?: CreateServerOpt
   // -------------------------------------------------------------------------
   // MCP Resources
   // -------------------------------------------------------------------------
-  let resourceCache: ResourceCache | null = null;
   if (!options?.disableResources) {
-    resourceCache = registerResources(server, client);
+    registerResources(server, client);
   }
 
   // -------------------------------------------------------------------------
@@ -434,5 +432,5 @@ export function createWhoopServer(client: WhoopClient, options?: CreateServerOpt
   // -------------------------------------------------------------------------
   registerPrompts(server);
 
-  return { server, resourceCache };
+  return { server };
 }

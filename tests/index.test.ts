@@ -80,7 +80,7 @@ function setupHappyPath(): void {
   const mockClient = { get: vi.fn() };
   mockCreateWhoopClient.mockReturnValue(mockClient);
   const mockServer = { connect: mockConnect };
-  mockCreateWhoopServer.mockReturnValue({ server: mockServer, resourceCache: null });
+  mockCreateWhoopServer.mockReturnValue({ server: mockServer });
   mockConnect.mockResolvedValue(undefined);
   MockStdioServerTransport.mockReturnValue(mockStdioTransportInstance);
 }
@@ -286,16 +286,8 @@ describe("main() entry point", () => {
       await expect(clientOptions.onTokenRefresh()).rejects.toThrow(/no stored tokens/i);
     });
 
-    it("invalidates resource cache on token refresh", async () => {
+    it("clears the shared cache on token refresh", async () => {
       setupHappyPath();
-
-      // Make createWhoopServer return a mock cache
-      const mockInvalidateAll = vi.fn();
-      const mockServer = { connect: mockConnect };
-      mockCreateWhoopServer.mockReturnValue({
-        server: mockServer,
-        resourceCache: { invalidateAll: mockInvalidateAll },
-      });
 
       const storedTokens = {
         access_token: "old-access",
@@ -324,13 +316,16 @@ describe("main() entry point", () => {
       const { main } = await importMain();
       await main();
 
-      // Extract the onTokenRefresh callback and invoke it
+      // The shared cache is constructed inside main() and passed to the client.
       const clientOptions = mockCreateWhoopClient.mock.calls[0][0] as {
         onTokenRefresh: () => Promise<string>;
+        cache: { clear: () => void };
       };
+      const clearSpy = vi.spyOn(clientOptions.cache, "clear");
+
       await clientOptions.onTokenRefresh();
 
-      expect(mockInvalidateAll).toHaveBeenCalledOnce();
+      expect(clearSpy).toHaveBeenCalledOnce();
     });
   });
 

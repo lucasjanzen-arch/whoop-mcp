@@ -19,6 +19,7 @@ import {
   ENDPOINT_WORKOUT,
   ENDPOINT_CYCLE,
 } from "../api/endpoints.js";
+import { DYNAMIC_TTL_MS, CYCLE_TTL_MS } from "../resources/index.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -117,10 +118,16 @@ function buildSummary(snapshot: {
  */
 export async function getToday(client: WhoopClient): Promise<TodaySnapshot> {
   const [recoveryResult, sleepResult, cycleResult, workoutResult] = await Promise.allSettled([
-    client.get<RecoveryCollection>(`${ENDPOINT_RECOVERY}?limit=1`),
-    client.get<SleepCollection>(`${ENDPOINT_SLEEP}?limit=1`),
-    client.get<CycleCollection>(`${ENDPOINT_CYCLE}?limit=1`),
-    client.get<WorkoutCollection>(`${ENDPOINT_WORKOUT}?limit=1`),
+    client.get<RecoveryCollection>(`${ENDPOINT_RECOVERY}?limit=1`, {
+      cache: true,
+      ttlMs: DYNAMIC_TTL_MS,
+    }),
+    client.get<SleepCollection>(`${ENDPOINT_SLEEP}?limit=1`, { cache: true, ttlMs: DYNAMIC_TTL_MS }),
+    client.get<CycleCollection>(`${ENDPOINT_CYCLE}?limit=1`, { cache: true, ttlMs: CYCLE_TTL_MS }),
+    client.get<WorkoutCollection>(`${ENDPOINT_WORKOUT}?limit=1`, {
+      cache: true,
+      ttlMs: DYNAMIC_TTL_MS,
+    }),
   ]);
 
   // Check if ALL primary endpoints failed (workout failure alone doesn't count)

@@ -861,3 +861,117 @@ describe("createWhoopClient — logger integration", () => {
     );
   });
 });
+
+// ---------------------------------------------------------------------------
+// Cache integration
+// ---------------------------------------------------------------------------
+
+describe("createWhoopClient — cache integration", () => {
+  const TEST_BASE_URL = "https://test.whoop.api";
+  const TEST_TOKEN = "test_access_token_abc123";
+
+  let mockFetch: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    mockFetch = vi.fn();
+    vi.stubGlobal("fetch", mockFetch);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function jsonOk(data: unknown): Response {
+    return {
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      json: () => Promise.resolve(data),
+      text: () => Promise.resolve(JSON.stringify(data)),
+    } as Response;
+  }
+
+  it("does not cache when no cache is configured even if cache:true is passed", async () => {
+    mockFetch.mockResolvedValue(jsonOk({ ok: 1 }));
+    const client = createWhoopClient({ accessToken: TEST_TOKEN, baseUrl: TEST_BASE_URL });
+
+    await client.get("/v2/recovery?limit=1", { cache: true });
+    await client.get("/v2/recovery?limit=1", { cache: true });
+
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not cache when cache option is absent", async () => {
+    const { MemoryCache } = await import("../../src/cache/memory-cache.js");
+    const cache = new MemoryCache();
+    mockFetch.mockResolvedValue(jsonOk({ ok: 1 }));
+    const client = createWhoopClient({ accessToken: TEST_TOKEN, baseUrl: TEST_BASE_URL, cache });
+
+    await client.get("/v2/recovery?limit=1");
+    await client.get("/v2/recovery?limit=1");
+
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("serves a cache hit from a single fetch when cache:true", async () => {
+    const { MemoryCache } = await import("../../src/cache/memory-cache.js");
+    const cache = new MemoryCache();
+    mockFetch.mockResolvedValue(jsonOk({ value: 42 }));
+    const client = createWhoopClient({ accessToken: TEST_TOKEN, baseUrl: TEST_BASE_URL, cache });
+
+    const first = await client.get<{ value: number }>("/v2/recovery?limit=1", { cache: true });
+    const second = await client.get<{ value: number }>("/v2/recovery?limit=1", { cache: true });
+
+    expect(first).toEqual({ value: 42 });
+    expect(second).toEqual({ value: 42 });
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("caches by normalized key regardless of query param order", async () => {
+    const { MemoryCache } = await import("../../src/cache/memory-cache.js");
+    const cache = new MemoryCache();
+    mockFetch.mockResolvedValue(jsonOk({ value: 1 }));
+    const client = createWhoopClient({ accessToken: TEST_TOKEN, baseUrl: TEST_BASE_URL, cache });
+
+    await client.get("/v2/recovery?limit=1&start=a", { cache: true });
+    await client.get("/v2/recovery?start=a&limit=1", { cache: true });
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("deduplicates concurrent identical requests (stampede prevention)", async () => {
+    const { MemoryCache } = await import("../../src/cache/memory-cache.js");
+    const cache = new MemoryCache();
+    let resolveFetch: (r: Response) => void = () => {};
+    mockFetch.mockImplementation(
+      () =>
+        new Promise<Response>((resolve) => {
+          resolveFetch = resolve;
+        })
+    );
+    const client = createWhoopClient({ accessToken: TEST_TOKEN, baseUrl: TEST_BASE_URL, cache });
+
+    const p1 = client.get("/v2/recovery?limit=1", { cache: true });
+    const p2 = client.get("/v2/recovery?limit=1", { cache: true });
+
+    resolveFetch(jsonOk({ value: 7 }));
+    const [r1, r2] = await Promise.all([p1, p2]);
+
+    expect(r1).toEqual({ value: 7 });
+    expect(r2).toEqual({ value: 7 });
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("shares cache across the resource and tool paths for the same key", async () => {
+    const { MemoryCache } = await import("../../src/cache/memory-cache.js");
+    const cache = new MemoryCache();
+    mockFetch.mockResolvedValue(jsonOk({ value: 99 }));
+    const client = createWhoopClient({ accessToken: TEST_TOKEN, baseUrl: TEST_BASE_URL, cache });
+
+    // First caller (e.g. resource) populates, second caller (e.g. get_today) hits.
+    await client.get("/v2/cycle?limit=1", { cache: true });
+    await client.get("/v2/cycle?limit=1", { cache: true });
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+});

@@ -847,7 +847,7 @@ describe("createWhoopServer (resources)", () => {
 describe("createWhoopServer (resources disabled)", () => {
   it("does not register resources when disableResources is true", async () => {
     const mockWhoopClient = createMockClient();
-    const { server, resourceCache } = createWhoopServer(mockWhoopClient, {
+    const { server } = createWhoopServer(mockWhoopClient, {
       disableResources: true,
     });
 
@@ -859,7 +859,6 @@ describe("createWhoopServer (resources disabled)", () => {
       // When no resources are registered, the server doesn't advertise the
       // resources capability, so listResources throws "Method not found".
       await expect(mcpClient.listResources()).rejects.toThrow("Method not found");
-      expect(resourceCache).toBeNull();
     } finally {
       await mcpClient.close();
       await server.close();
