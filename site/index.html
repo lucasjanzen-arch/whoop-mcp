@@ -313,6 +313,67 @@
         max-width: 36ch;
       }
 
+      /* ---- setup ---- */
+      .setup {
+        border-top: 1px solid var(--rule);
+        padding: 3.4rem 2rem 3.8rem;
+      }
+      .setup-head {
+        font-size: clamp(1.6rem, 3vw, 2.1rem);
+        font-weight: 800;
+        letter-spacing: -0.03em;
+        margin: 0 0 0.6rem;
+      }
+      .setup-sub {
+        font-size: 1.02rem;
+        line-height: 1.5;
+        color: var(--ink-2);
+        margin: 0 0 2rem;
+        max-width: 56ch;
+      }
+      .setup-sub a {
+        color: var(--ink);
+      }
+      .setup-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1px;
+        background: var(--rule);
+        border: 1px solid var(--rule);
+      }
+      .setup-card {
+        padding: 1.9rem;
+        min-width: 0;
+        background: var(--paper);
+      }
+      .setup-card h3 {
+        font-size: 1.1rem;
+        font-weight: 700;
+        margin: 0 0 1rem;
+        letter-spacing: -0.01em;
+      }
+      .setup-card p {
+        font-size: 0.95rem;
+        line-height: 1.55;
+        color: var(--ink-2);
+        margin: 1.1rem 0 0;
+      }
+      .setup-card p code,
+      .setup-sub code {
+        font-family: var(--mono);
+        font-size: 0.88em;
+        color: var(--ink);
+      }
+      .install--block {
+        display: flex;
+        justify-content: space-between;
+        width: 100%;
+        overflow-x: auto;
+      }
+      .install--block code {
+        white-space: nowrap;
+      }
+
       /* ---- footer ---- */
       .foot {
         display: flex;
@@ -394,6 +455,12 @@
           width: 48px;
           height: 48px;
         }
+        .setup-grid {
+          grid-template-columns: 1fr;
+        }
+        .setup {
+          padding: 2.6rem 1.25rem 2.8rem;
+        }
         .nav {
           padding: 1rem 1.25rem;
         }
@@ -444,7 +511,7 @@
             <div class="cta">
               <a
                 class="btn btn-primary"
-                href="https://github.com/shashankswe2020-ux/whoop-mcp#quickstart-claude-desktop"
+                href="#setup"
                 >Get started</a
               >
               <a class="btn btn-ghost" href="https://www.npmjs.com/package/whoop-ai-mcp"
@@ -584,6 +651,124 @@
             </p>
           </article>
         </section>
+
+        <section class="setup" id="setup">
+          <h2 class="setup-head">Connect it in one command</h2>
+          <p class="setup-sub">
+            The setup wizard writes your client config and verifies your WHOOP
+            credentials in one go. Have your WHOOP Developer App client ID and secret
+            ready from
+            <a href="https://developer.whoop.com">developer.whoop.com</a>.
+          </p>
+          <div class="setup-grid">
+            <div class="setup-card">
+              <h3>Claude Desktop</h3>
+              <div class="install install--block" data-install="npx whoop-ai-mcp setup">
+                <code>npx whoop-ai-mcp setup</code>
+                <button class="copy" type="button" aria-label="Copy Claude Desktop command">
+                  <svg
+                    viewBox="0 0 24 24"
+                    width="18"
+                    height="18"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                  >
+                    <rect x="9" y="9" width="11" height="11" />
+                    <path d="M5 15V5a1 1 0 0 1 1-1h9" />
+                  </svg>
+                </button>
+              </div>
+              <p>
+                Merges the <code>whoop</code> server into
+                <code>claude_desktop_config.json</code> (with a <code>.bak</code> backup),
+                then restart Claude Desktop to load it.
+              </p>
+            </div>
+
+            <div class="setup-card">
+              <h3>Claude Code</h3>
+              <div
+                class="install install--block"
+                data-install="npx whoop-ai-mcp setup --client=claude-code"
+              >
+                <code>npx whoop-ai-mcp setup --client=claude-code</code>
+                <button class="copy" type="button" aria-label="Copy Claude Code command">
+                  <svg
+                    viewBox="0 0 24 24"
+                    width="18"
+                    height="18"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                  >
+                    <rect x="9" y="9" width="11" height="11" />
+                    <path d="M5 15V5a1 1 0 0 1 1-1h9" />
+                  </svg>
+                </button>
+              </div>
+              <p>
+                Prints the equivalent <code>claude mcp add</code> command to register the
+                server with Claude Code. Add <code>--verify</code> to run the OAuth flow
+                end-to-end.
+              </p>
+            </div>
+
+            <div class="setup-card">
+              <h3>Codex</h3>
+              <div
+                class="install install--block"
+                data-install="npx whoop-ai-mcp setup --client=codex"
+              >
+                <code>npx whoop-ai-mcp setup --client=codex</code>
+                <button class="copy" type="button" aria-label="Copy Codex command">
+                  <svg
+                    viewBox="0 0 24 24"
+                    width="18"
+                    height="18"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                  >
+                    <rect x="9" y="9" width="11" height="11" />
+                    <path d="M5 15V5a1 1 0 0 1 1-1h9" />
+                  </svg>
+                </button>
+              </div>
+              <p>
+                Prints a <code>codex mcp add</code> command that registers the server in
+                your <code>~/.codex/config.toml</code> for the OpenAI Codex CLI.
+              </p>
+            </div>
+
+            <div class="setup-card">
+              <h3>GitHub Copilot</h3>
+              <div
+                class="install install--block"
+                data-install="npx whoop-ai-mcp setup --client=copilot"
+              >
+                <code>npx whoop-ai-mcp setup --client=copilot</code>
+                <button class="copy" type="button" aria-label="Copy GitHub Copilot command">
+                  <svg
+                    viewBox="0 0 24 24"
+                    width="18"
+                    height="18"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                  >
+                    <rect x="9" y="9" width="11" height="11" />
+                    <path d="M5 15V5a1 1 0 0 1 1-1h9" />
+                  </svg>
+                </button>
+              </div>
+              <p>
+                Prints a <code>code --add-mcp</code> command to register the server with
+                GitHub Copilot in VS Code.
+              </p>
+            </div>
+          </div>
+        </section>
       </main>
 
       <footer class="foot">
@@ -598,9 +783,9 @@
     </div>
 
     <script>
-      const wrap = document.querySelector('.install');
-      const btn = wrap && wrap.querySelector('.copy');
-      if (wrap && btn) {
+      document.querySelectorAll('.install').forEach((wrap) => {
+        const btn = wrap.querySelector('.copy');
+        if (!btn) return;
         const original = btn.innerHTML;
         btn.addEventListener('click', async () => {
           try {
@@ -611,7 +796,7 @@
             /* clipboard blocked, no-op */
           }
         });
-      }
+      });
     </script>
   </body>
 </html>

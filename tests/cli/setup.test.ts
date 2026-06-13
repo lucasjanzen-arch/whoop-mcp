@@ -12,6 +12,8 @@ import {
   claudeDesktopConfigPath,
   generateClaudeCodeCommand,
   generateClaudeDesktopEntry,
+  generateCodexCommand,
+  generateCopilotCommand,
   mergeClaudeDesktopConfig,
 } from "../../src/cli/config-generators.js";
 import { parseSetupArgs, runSetup } from "../../src/cli/setup.js";
@@ -108,6 +110,61 @@ describe("generateClaudeCodeCommand", () => {
   });
 });
 
+describe("generateCodexCommand", () => {
+  it("emits a `codex mcp add` command with quoted env values", () => {
+    const cmd = generateCodexCommand({
+      WHOOP_CLIENT_ID: "id-123",
+      WHOOP_CLIENT_SECRET: "secret-xyz",
+    });
+    expect(cmd).toContain("codex mcp add whoop");
+    expect(cmd).toContain("-- npx -y whoop-ai-mcp");
+    expect(cmd).toContain("--env WHOOP_CLIENT_ID='id-123'");
+    expect(cmd).toContain("--env WHOOP_CLIENT_SECRET='secret-xyz'");
+  });
+
+  it("escapes single quotes in secrets", () => {
+    const cmd = generateCodexCommand({
+      WHOOP_CLIENT_ID: "ok",
+      WHOOP_CLIENT_SECRET: "weird's secret",
+    });
+    expect(cmd).toContain(`'weird'\\''s secret'`);
+  });
+});
+
+describe("generateCopilotCommand", () => {
+  it("emits a `code --add-mcp` command with a valid JSON payload", () => {
+    const cmd = generateCopilotCommand({
+      WHOOP_CLIENT_ID: "id-123",
+      WHOOP_CLIENT_SECRET: "secret-xyz",
+    });
+    expect(cmd.startsWith("code --add-mcp ")).toBe(true);
+
+    // The JSON payload is single-quoted for the shell; strip the wrapper and parse.
+    const jsonStart = cmd.indexOf("'");
+    const jsonEnd = cmd.lastIndexOf("'");
+    const json = cmd.slice(jsonStart + 1, jsonEnd);
+    const parsed = JSON.parse(json) as {
+      name: string;
+      command: string;
+      args: string[];
+      env: { WHOOP_CLIENT_ID: string; WHOOP_CLIENT_SECRET: string };
+    };
+    expect(parsed.name).toBe("whoop");
+    expect(parsed.command).toBe("npx");
+    expect(parsed.args).toEqual(["-y", "whoop-ai-mcp"]);
+    expect(parsed.env.WHOOP_CLIENT_ID).toBe("id-123");
+    expect(parsed.env.WHOOP_CLIENT_SECRET).toBe("secret-xyz");
+  });
+
+  it("escapes single quotes in secrets so the shell wrapper stays intact", () => {
+    const cmd = generateCopilotCommand({
+      WHOOP_CLIENT_ID: "ok",
+      WHOOP_CLIENT_SECRET: "weird's secret",
+    });
+    expect(cmd).toContain(`'\\''`);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // parseSetupArgs
 // ---------------------------------------------------------------------------
@@ -136,6 +193,11 @@ describe("parseSetupArgs", () => {
     const opts = parseSetupArgs(["--client-id", "abc", "--client", "claude-code"]);
     expect(opts.clientId).toBe("abc");
     expect(opts.client).toBe("claude-code");
+  });
+
+  it("accepts codex and copilot client targets", () => {
+    expect(parseSetupArgs(["--client=codex"]).client).toBe("codex");
+    expect(parseSetupArgs(["--client=copilot"]).client).toBe("copilot");
   });
 
   it("rejects invalid --client values", () => {
@@ -340,6 +402,42 @@ describe("runSetup — non-interactive", () => {
     expect(output()).toContain("claude mcp add whoop");
     expect(output()).toContain("WHOOP_CLIENT_ID='id'");
     // No file should have been written for the claude-code path
+    expect(fake.files.size).toBe(0);
+  });
+
+  it("prints the codex mcp add command for codex target", async () => {
+    const { io, output } = makeIo();
+    const fake = makeFakeFs();
+
+    await runSetup(
+      {
+        clientId: "id",
+        clientSecret: "secret",
+        client: "codex",
+      },
+      { io, fs: fake.fs }
+    );
+
+    expect(output()).toContain("codex mcp add whoop");
+    expect(output()).toContain("WHOOP_CLIENT_ID='id'");
+    expect(fake.files.size).toBe(0);
+  });
+
+  it("prints the code --add-mcp command for copilot target", async () => {
+    const { io, output } = makeIo();
+    const fake = makeFakeFs();
+
+    await runSetup(
+      {
+        clientId: "id",
+        clientSecret: "secret",
+        client: "copilot",
+      },
+      { io, fs: fake.fs }
+    );
+
+    expect(output()).toContain("code --add-mcp");
+    expect(output()).toContain('"WHOOP_CLIENT_ID":"id"');
     expect(fake.files.size).toBe(0);
   });
 

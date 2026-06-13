@@ -189,8 +189,8 @@ npm run build
 ### Setup wizard (`whoop-ai-mcp setup`)
 
 For a guided installation that writes the Claude Desktop config (or prints the
-`claude mcp add` command for Claude Code) and verifies your WHOOP credentials
-in one go:
+registration command for Claude Code, Codex, or GitHub Copilot) and verifies
+your WHOOP credentials in one go:
 
 ```bash
 npx whoop-ai-mcp setup
@@ -201,6 +201,10 @@ Flags:
 - `--client=claude-desktop` (default) writes/merges `claude_desktop_config.json`
   with an automatic `.bak` backup.
 - `--client=claude-code` prints the equivalent `claude mcp add` command.
+- `--client=codex` prints the equivalent `codex mcp add` command (registers the
+  server in `~/.codex/config.toml`).
+- `--client=copilot` prints the equivalent `code --add-mcp` command for GitHub
+  Copilot in VS Code.
 - `--verify` runs the OAuth flow end-to-end and fetches your profile to confirm
   everything is wired correctly before exiting.
 - `--client-id` / `--client-secret` skip the interactive prompts (useful for

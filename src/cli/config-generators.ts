@@ -12,7 +12,7 @@ import { join } from "node:path";
 // Types
 // ---------------------------------------------------------------------------
 
-export type ClientTarget = "claude-desktop" | "claude-code";
+export type ClientTarget = "claude-desktop" | "claude-code" | "codex" | "copilot";
 
 export interface ServerEnv {
   readonly WHOOP_CLIENT_ID: string;
@@ -101,6 +101,35 @@ export function generateClaudeCodeCommand(env: ServerEnv): string {
   const id = shellQuote(env.WHOOP_CLIENT_ID);
   const secret = shellQuote(env.WHOOP_CLIENT_SECRET);
   return `claude mcp add ${SERVER_NAME} -- npx -y whoop-ai-mcp -e WHOOP_CLIENT_ID=${id} -e WHOOP_CLIENT_SECRET=${secret}`;
+}
+
+/**
+ * Generate the `codex mcp add` shell command for the OpenAI Codex CLI.
+ * Registers the server in `~/.codex/config.toml` under `[mcp_servers.whoop]`.
+ * Single-quoted env values; values are validated by the wizard before reaching here.
+ */
+export function generateCodexCommand(env: ServerEnv): string {
+  const id = shellQuote(env.WHOOP_CLIENT_ID);
+  const secret = shellQuote(env.WHOOP_CLIENT_SECRET);
+  return `codex mcp add ${SERVER_NAME} --env WHOOP_CLIENT_ID=${id} --env WHOOP_CLIENT_SECRET=${secret} -- npx -y whoop-ai-mcp`;
+}
+
+/**
+ * Generate the `code --add-mcp` shell command for GitHub Copilot in VS Code.
+ * The flag accepts a JSON server definition; the JSON is single-quoted for the
+ * shell. Values are validated by the wizard before reaching here.
+ */
+export function generateCopilotCommand(env: ServerEnv): string {
+  const payload = JSON.stringify({
+    name: SERVER_NAME,
+    command: "npx",
+    args: ["-y", "whoop-ai-mcp"],
+    env: {
+      WHOOP_CLIENT_ID: env.WHOOP_CLIENT_ID,
+      WHOOP_CLIENT_SECRET: env.WHOOP_CLIENT_SECRET,
+    },
+  });
+  return `code --add-mcp ${shellQuote(payload)}`;
 }
 
 /**

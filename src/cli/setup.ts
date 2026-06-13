@@ -9,6 +9,8 @@
  *        - claude-desktop: merges a `whoop` entry into the existing config
  *          file (creates `.bak` first; restores on failure)
  *        - claude-code:    prints the `claude mcp add ...` command to run
+ *        - codex:          prints the `codex mcp add ...` command to run
+ *        - copilot:        prints the `code --add-mcp ...` command to run
  *
  * No new runtime dependencies — uses only Node's built-in modules.
  * All output goes to stdout; errors throw and surface via the dispatcher.
@@ -30,6 +32,8 @@ import {
   claudeDesktopConfigPath,
   generateClaudeCodeCommand,
   generateClaudeDesktopEntry,
+  generateCodexCommand,
+  generateCopilotCommand,
   mergeClaudeDesktopConfig,
   type ClaudeDesktopConfig,
   type ClientTarget,
@@ -58,7 +62,7 @@ export interface SetupOptions {
  * Supported flags:
  *   --client-id=<value> | --client-id <value>
  *   --client-secret=<value> | --client-secret <value>
- *   --client=<claude-desktop|claude-code>
+ *   --client=<claude-desktop|claude-code|codex|copilot>
  *   --verify
  *   --config-path=<value>   (test hook)
  */
@@ -94,9 +98,9 @@ export function parseSetupArgs(argv: readonly string[]): SetupOptions {
         break;
       case "--client": {
         const v = valueAt();
-        if (v !== "claude-desktop" && v !== "claude-code") {
+        if (!isClientTarget(v)) {
           throw new Error(
-            `Invalid --client value: "${v}". Must be "claude-desktop" or "claude-code".`
+            `Invalid --client value: "${v}". Must be "claude-desktop", "claude-code", "codex", or "copilot".`
           );
         }
         out.client = v;
@@ -123,6 +127,17 @@ function splitFlag(arg: string): [string, string | undefined] {
   const eq = arg.indexOf("=");
   if (eq === -1) return [arg, undefined];
   return [arg.slice(0, eq), arg.slice(eq + 1)];
+}
+
+const CLIENT_TARGETS: readonly ClientTarget[] = [
+  "claude-desktop",
+  "claude-code",
+  "codex",
+  "copilot",
+];
+
+function isClientTarget(value: string): value is ClientTarget {
+  return (CLIENT_TARGETS as readonly string[]).includes(value);
 }
 
 // ---------------------------------------------------------------------------
@@ -275,9 +290,9 @@ export async function runSetup(options: SetupOptions = {}, deps: RunSetupDeps = 
     options.client ??
     (((await promptText(
       merged.io,
-      "Target client (claude-desktop / claude-code) [claude-desktop]: "
+      "Target client (claude-desktop / claude-code / codex / copilot) [claude-desktop]: "
     )) || "claude-desktop") as ClientTarget);
-  if (target !== "claude-desktop" && target !== "claude-code") {
+  if (!isClientTarget(target)) {
     throw new Error(`Invalid client target: "${target}"`);
   }
 
@@ -354,6 +369,20 @@ export async function runSetup(options: SetupOptions = {}, deps: RunSetupDeps = 
   if (target === "claude-code") {
     out.write("\nRun this command in your shell to register the server:\n\n");
     out.write(`  ${generateClaudeCodeCommand(env)}\n\n`);
+    return;
+  }
+
+  if (target === "codex") {
+    out.write("\nRun this command in your shell to register the server with Codex:\n\n");
+    out.write(`  ${generateCodexCommand(env)}\n\n`);
+    return;
+  }
+
+  if (target === "copilot") {
+    out.write(
+      "\nRun this command to register the server with GitHub Copilot in VS Code:\n\n"
+    );
+    out.write(`  ${generateCopilotCommand(env)}\n\n`);
     return;
   }
 
