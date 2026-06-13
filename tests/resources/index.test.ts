@@ -30,8 +30,7 @@ describe("RESOURCE_DEFINITIONS", () => {
 
   it("recovery and sleep resources use 5-minute TTL", () => {
     const fiveMinResources = RESOURCE_DEFINITIONS.filter(
-      (d) =>
-        d.uri === "whoop://v2/user/recovery/latest" || d.uri === "whoop://v2/user/sleep/latest"
+      (d) => d.uri === "whoop://v2/user/recovery/latest" || d.uri === "whoop://v2/user/sleep/latest"
     );
     expect(fiveMinResources).toHaveLength(2);
     for (const def of fiveMinResources) {

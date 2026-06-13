@@ -18,8 +18,7 @@ interface JournalRecord {
   note: string;
 }
 
-const UUID_V4 =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 describe("withPreview", () => {
   describe("preview mode (confirm: false)", () => {
@@ -106,10 +105,7 @@ describe("withPreview", () => {
       });
 
       if (result.preview) throw new Error("expected receipt");
-      expect(write).toHaveBeenCalledWith(
-        { date: "2026-04-12", note: "n" },
-        result.idempotency_key
-      );
+      expect(write).toHaveBeenCalledWith({ date: "2026-04-12", note: "n" }, result.idempotency_key);
     });
 
     it("reuses a supplied idempotency_key (safe retry)", async () => {

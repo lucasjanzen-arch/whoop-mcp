@@ -43,11 +43,7 @@ describe("HTTP transport — MCP integration", () => {
       "fetch",
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
         const url =
-          typeof input === "string"
-            ? input
-            : input instanceof URL
-              ? input.href
-              : input.url;
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
         if (url.startsWith("https://api.prod.whoop.com")) {
           return new Response(JSON.stringify(PROFILE_FIXTURE), {
             status: 200,

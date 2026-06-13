@@ -122,7 +122,10 @@ export async function getToday(client: WhoopClient): Promise<TodaySnapshot> {
       cache: true,
       ttlMs: DYNAMIC_TTL_MS,
     }),
-    client.get<SleepCollection>(`${ENDPOINT_SLEEP}?limit=1`, { cache: true, ttlMs: DYNAMIC_TTL_MS }),
+    client.get<SleepCollection>(`${ENDPOINT_SLEEP}?limit=1`, {
+      cache: true,
+      ttlMs: DYNAMIC_TTL_MS,
+    }),
     client.get<CycleCollection>(`${ENDPOINT_CYCLE}?limit=1`, { cache: true, ttlMs: CYCLE_TTL_MS }),
     client.get<WorkoutCollection>(`${ENDPOINT_WORKOUT}?limit=1`, {
       cache: true,

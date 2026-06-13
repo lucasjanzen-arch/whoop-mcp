@@ -147,15 +147,7 @@ export async function getCalendar(
     Date.UTC(gridStart.getUTCFullYear(), gridStart.getUTCMonth(), gridStart.getUTCDate())
   ).toISOString();
   const endISO = new Date(
-    Date.UTC(
-      gridEnd.getUTCFullYear(),
-      gridEnd.getUTCMonth(),
-      gridEnd.getUTCDate(),
-      23,
-      59,
-      59,
-      999
-    )
+    Date.UTC(gridEnd.getUTCFullYear(), gridEnd.getUTCMonth(), gridEnd.getUTCDate(), 23, 59, 59, 999)
   ).toISOString();
 
   // Throttle inter-page requests for large ranges to avoid 429s across

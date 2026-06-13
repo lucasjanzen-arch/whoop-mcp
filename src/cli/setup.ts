@@ -379,9 +379,7 @@ export async function runSetup(options: SetupOptions = {}, deps: RunSetupDeps = 
   }
 
   if (target === "copilot") {
-    out.write(
-      "\nRun this command to register the server with GitHub Copilot in VS Code:\n\n"
-    );
+    out.write("\nRun this command to register the server with GitHub Copilot in VS Code:\n\n");
     out.write(`  ${generateCopilotCommand(env)}\n\n`);
     return;
   }
