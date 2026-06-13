@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-06-13
+
 ### Added
 - **Setup wizard supports Codex & GitHub Copilot** — `whoop-ai-mcp setup --client=codex` prints a `codex mcp add` command (registers the server in `~/.codex/config.toml`) and `--client=copilot` prints a `code --add-mcp` command for GitHub Copilot in VS Code. Both reuse the same shell-quoting as the Claude Code path; the interactive prompt now offers all four targets.
 - **Shared in-memory cache (`MemoryCache`)** — generic LRU + TTL cache (`src/cache/memory-cache.ts`) backing both MCP resources and read tools. Opt-in per request via `client.get(path, { cache: true, ttlMs })`. TTLs: profile 1 hr, recovery/sleep 5 min, cycle 2 min; date-range collections stay uncached. Cache keys are normalized by path with alphabetically-sorted query params (no tokens in keys), concurrent identical requests are de-duplicated (stampede prevention), and the whole cache is cleared on token refresh. `get_today` now serves from the same cache, so a warm cache makes zero API calls.
