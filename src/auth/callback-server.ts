@@ -198,7 +198,7 @@ export function startCallbackServer(options: CallbackServerOptions): CallbackSer
       }
     });
 
-    server.listen(requestedPort, "127.0.0.1", () => {
+    server.listen(requestedPort, "0.0.0.0", () => {
       const addr = server.address();
       if (addr && typeof addr === "object") {
         resolvedPort = addr.port;
