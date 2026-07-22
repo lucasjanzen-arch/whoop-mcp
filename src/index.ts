@@ -110,7 +110,11 @@ export async function main(): Promise<void> {
   // 2. Read WHOOP OAuth credentials (always required)
   const clientId = getRequiredEnv("WHOOP_CLIENT_ID");
   const clientSecret = getRequiredEnv("WHOOP_CLIENT_SECRET");
-  const oauthConfig: OAuthConfig = { clientId, clientSecret };
+  const oauthConfig: OAuthConfig = {
+    clientId,
+    clientSecret,
+    redirectUri: process.env.WHOOP_REDIRECT_URI,
+  };
 
   // 3. Authenticate with WHOOP — uses cached tokens, refreshes, or runs full flow
   console.error("Authenticating with WHOOP...");
